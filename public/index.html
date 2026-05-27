@@ -1,4 +1,4 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -158,10 +158,10 @@
   #app { display: none; min-height: 100vh; }
 
   .topbar {
-    background: var(--surface);
-    border-bottom: 0.5px solid var(--border);
+    background: #000000;
+    border-bottom: 0.5px solid rgba(255,255,255,0.08);
     padding: 0 1.5rem;
-    height: 54px;
+    height: 64px;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -176,18 +176,18 @@
   .topbar-sub { font-size: 11px; color: var(--text-muted); }
 
   .topbar-right { display: flex; align-items: center; gap: 12px; }
-  .user-pill { display: flex; align-items: center; gap: 8px; padding: 5px 12px 5px 5px; background: var(--surface2); border-radius: 999px; border: 0.5px solid var(--border); }
-  .user-avatar { width: 26px; height: 26px; border-radius: 50%; background: #000000; color: #E8A300; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
-  .user-name { font-size: 13px; font-weight: 500; }
+  .user-pill { display: flex; align-items: center; gap: 8px; padding: 5px 12px 5px 5px; background: rgba(255,255,255,0.08); border-radius: 999px; border: 0.5px solid rgba(255,255,255,0.12); }
+  .user-avatar { width: 26px; height: 26px; border-radius: 50%; background: #E8A300; color: #000; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+  .user-name { font-size: 13px; font-weight: 500; color: #fff; }
   .role-badge { font-size: 10px; padding: 2px 7px; border-radius: 999px; font-weight: 500; }
-  .role-manager { background: var(--purple-light); color: var(--purple-text); }
-  .role-team { background: var(--accent-light); color: var(--accent-text); }
+  .role-manager { background: rgba(232,163,0,0.2); color: #E8A300; }
+  .role-team { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.7); }
 
-  .nav-tabs { display: flex; gap: 4px; background: var(--surface2); padding: 4px; border-radius: var(--radius-lg); border: 0.5px solid var(--border); }
-  .nav-tab { font-family: 'DM Sans', sans-serif; font-size: 13px; padding: 7px 16px; border-radius: 8px; border: none; background: transparent; color: var(--text-muted); cursor: pointer; font-weight: 500; display: flex; align-items: center; gap: 6px; transition: all 0.15s; }
-  .nav-tab:hover { color: var(--text); }
-  .nav-tab.active { background: var(--surface); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,0.06); border: 0.5px solid var(--border); }
-  .count-badge { background: var(--accent); color: #fff; border-radius: 999px; padding: 1px 6px; font-size: 10px; }
+  .nav-tabs { display: flex; gap: 4px; background: rgba(255,255,255,0.08); padding: 4px; border-radius: var(--radius-lg); border: 0.5px solid rgba(255,255,255,0.1); }
+  .nav-tab { font-family: 'DM Sans', sans-serif; font-size: 13px; padding: 7px 16px; border-radius: 8px; border: none; background: transparent; color: rgba(255,255,255,0.5); cursor: pointer; font-weight: 500; display: flex; align-items: center; gap: 6px; transition: all 0.15s; }
+  .nav-tab:hover { color: #fff; }
+  .nav-tab.active { background: rgba(255,255,255,0.12); color: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.2); border: 0.5px solid rgba(255,255,255,0.15); }
+  .count-badge { background: #E8A300; color: #000; border-radius: 999px; padding: 1px 6px; font-size: 10px; font-weight: 600; }
 
   .main { max-width: 860px; margin: 0 auto; padding: 1.75rem 1.5rem; }
 
@@ -462,7 +462,7 @@
 
   <header class="topbar">
     <div class="topbar-left">
-      <img src="/logo-dark.png" alt="Trelleborg" class="brand-logo" id="topbar-logo" style="height:32px;object-fit:contain">
+      <img src="/logo-dark.png" alt="Trelleborg" class="brand-logo" id="topbar-logo" style="height:48px;object-fit:contain">
     </div>
     <div style="display:flex;align-items:center;gap:10px">
       <div class="nav-tabs">
@@ -485,8 +485,8 @@
         <span class="user-name" id="user-name-top"></span>
         <span class="role-badge" id="role-badge-top"></span>
       </div>
-      <button class="btn btn-sm" id="theme-toggle" onclick="toggleTheme()" title="Toggle theme"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></button>
-      <button class="btn btn-sm" onclick="doLogout()" title="Sign out">
+      <button class="btn btn-sm" id="theme-toggle" onclick="toggleTheme()" title="Toggle theme" style="color:#fff;border-color:rgba(255,255,255,0.15)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></button>
+      <button class="btn btn-sm" onclick="doLogout()" title="Sign out" style="color:#fff;border-color:rgba(255,255,255,0.15)">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
       </button>
     </div>
