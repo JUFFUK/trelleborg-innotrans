@@ -1,4 +1,4 @@
-<!DOCTYPE html> 
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -378,6 +378,7 @@
   :root[data-theme='dark'] #login-screen,
   :root[data-theme='dark'] #setup-screen { background: #000000; }
   :root[data-theme='dark'] .login-card { background: #000000; border-color: rgba(255,255,255,0.1); }
+  :root[data-theme='dark'] .topbar { background: #000000; border-bottom-color: rgba(255,255,255,0.08); }
   :root[data-theme='dark'] .login-title { color: #F0EEE8 !important; }
   :root[data-theme='dark'] .login-sub { color: rgba(255,255,255,0.45) !important; }
   :root[data-theme='dark'] .login-card .field label { color: rgba(255,255,255,0.45) !important; }
@@ -461,11 +462,7 @@
 
   <header class="topbar">
     <div class="topbar-left">
-      <img src="/logo-dark.png" alt="Trelleborg" class="brand-logo" style="height:28px;object-fit:contain">
-      <div>
-        <div class="topbar-title">Trelleborg</div>
-        <div class="topbar-sub">Innotrans 2026 · Berlin</div>
-      </div>
+      <img src="/logo-dark.png" alt="Trelleborg" class="brand-logo" id="topbar-logo" style="height:32px;object-fit:contain">
     </div>
     <div style="display:flex;align-items:center;gap:10px">
       <div class="nav-tabs">
