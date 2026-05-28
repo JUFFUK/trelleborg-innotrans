@@ -35,8 +35,6 @@ async function syncToHubSpot(lead, token) {
     phone: lead.phone || "",
     company: lead.company || "",
     jobtitle: lead.title || "",
-    lead_status: tempToLeadStatus(lead.temp),
-    description: descParts.join(" | "),
   };
 
   // Search for existing contact by email
