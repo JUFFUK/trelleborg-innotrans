@@ -50,7 +50,6 @@ async function syncToHubSpot(lead, token) {
       limit: 1,
     }),
   });
-
   const searchText = await searchRes.text();
   if (!searchRes.ok) throw new Error("HubSpot search failed (" + searchRes.status + "): " + searchText);
   const searchData = JSON.parse(searchText);
