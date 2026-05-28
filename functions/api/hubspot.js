@@ -1,12 +1,6 @@
 /**
  * POST /api/hubspot
  * Body: { leadId }
- *
- * Finds the lead in KV, creates or updates a HubSpot contact,
- * marks the lead as synced, and returns the updated lead.
- *
- * Required Cloudflare env variable: HUBSPOT_TOKEN
- * (HubSpot Service Key with crm.objects.contacts.read + write scopes)
  */
 
 function json(data, status = 200) {
@@ -52,7 +46,7 @@ export async function onRequest({ request, env }) {
 
   const HUBSPOT_TOKEN = env.HUBSPOT_TOKEN;
   if (!HUBSPOT_TOKEN) {
-    return json({ error: "HUBSPOT_TOKEN environment variable not set" }, 500);
+    return json({ error: "HUBSPOT_TOKEN not set in environment" }, 500);
   }
 
   let body;
@@ -65,15 +59,11 @@ export async function onRequest({ request, env }) {
   const { leadId } = body;
   if (!leadId) return json({ error: "leadId is required" }, 400);
 
-  // Load the lead from KV
   const lead = await env.LEADS.get("lead:" + leadId, { type: "json" });
-  if (!lead) return json({ error: "Lead not found" }, 404);
+  if (!lead) return json({ error: "Lead not found in KV" }, 404);
 
-  // Build a description string combining all Innotrans context
   const descParts = [];
-  if (lead.products && lead.products.length) {
-    descParts.push("Product interest: " + lead.products.join(", "));
-  }
+  if (lead.products && lead.products.length) descParts.push("Product interest: " + lead.products.join(", "));
   if (lead.followup) descParts.push("Follow-up: " + lead.followup);
   if (lead.notes) descParts.push("Notes: " + lead.notes);
   descParts.push("Captured by: " + (lead.capturedByName || lead.capturedBy || "Unknown"));
@@ -91,95 +81,74 @@ export async function onRequest({ request, env }) {
     description: descParts.join(" | "),
   };
 
-  // ── Step 1: Search for existing contact by email ──
+  // ── Search for existing contact ──
   let contactId = null;
-
   try {
-    const searchRes = await fetch(
-      "https://api.hubapi.com/crm/v3/objects/contacts/search",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer " + HUBSPOT_TOKEN,
-        },
-        body: JSON.stringify({
-          filterGroups: [
-            {
-              filters: [
-                {
-                  propertyName: "email",
-                  operator: "EQ",
-                  value: lead.email,
-                },
-              ],
-            },
-          ],
-          properties: ["id", "email"],
-          limit: 1,
-        }),
-      }
-    );
+    const searchRes = await fetch("https://api.hubapi.com/crm/v3/objects/contacts/search", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + HUBSPOT_TOKEN,
+      },
+      body: JSON.stringify({
+        filterGroups: [{ filters: [{ propertyName: "email", operator: "EQ", value: lead.email }] }],
+        properties: ["id", "email"],
+        limit: 1,
+      }),
+    });
 
-    if (searchRes.ok) {
-      const searchData = await searchRes.json();
-      if (searchData.results && searchData.results.length > 0) {
-        contactId = searchData.results[0].id;
-      }
+    const searchText = await searchRes.text();
+    if (!searchRes.ok) {
+      return json({ error: "HubSpot search failed (" + searchRes.status + "): " + searchText }, 502);
+    }
+    const searchData = JSON.parse(searchText);
+    if (searchData.results && searchData.results.length > 0) {
+      contactId = searchData.results[0].id;
     }
   } catch (e) {
-    console.error("HubSpot search error:", e);
+    return json({ error: "HubSpot search exception: " + e.message }, 502);
   }
 
-  // ── Step 2: Create or update the contact ──
+  // ── Create or update ──
   let hubspotContactId;
 
   if (contactId) {
-    const updateRes = await fetch(
-      "https://api.hubapi.com/crm/v3/objects/contacts/" + contactId,
-      {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer " + HUBSPOT_TOKEN,
-        },
-        body: JSON.stringify({ properties }),
-      }
-    );
+    const updateRes = await fetch("https://api.hubapi.com/crm/v3/objects/contacts/" + contactId, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + HUBSPOT_TOKEN,
+      },
+      body: JSON.stringify({ properties }),
+    });
 
+    const updateText = await updateRes.text();
     if (!updateRes.ok) {
-      const err = await updateRes.json();
-      return json({ error: "HubSpot update failed: " + (err.message || updateRes.status) }, 502);
+      return json({ error: "HubSpot update failed (" + updateRes.status + "): " + updateText }, 502);
     }
-
     hubspotContactId = contactId;
   } else {
-    const createRes = await fetch(
-      "https://api.hubapi.com/crm/v3/objects/contacts",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer " + HUBSPOT_TOKEN,
-        },
-        body: JSON.stringify({ properties }),
-      }
-    );
+    const createRes = await fetch("https://api.hubapi.com/crm/v3/objects/contacts", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + HUBSPOT_TOKEN,
+      },
+      body: JSON.stringify({ properties }),
+    });
 
+    const createText = await createRes.text();
     if (!createRes.ok) {
-      const err = await createRes.json();
-      return json({ error: "HubSpot create failed: " + (err.message || createRes.status) }, 502);
+      return json({ error: "HubSpot create failed (" + createRes.status + "): " + createText }, 502);
     }
-
-    const created = await createRes.json();
+    const created = JSON.parse(createText);
     hubspotContactId = created.id;
   }
 
-  // ── Step 3: Mark lead as synced in KV ──
+  // ── Mark synced in KV ──
   lead.synced = true;
   lead.hubspotContactId = hubspotContactId;
   lead.syncedAt = new Date().toISOString();
-
   await env.LEADS.put("lead:" + leadId, JSON.stringify(lead));
 
   return json(lead);
