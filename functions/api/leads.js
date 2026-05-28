@@ -13,6 +13,77 @@ async function getSession(request, env) {
   return session;
 }
 
+function tempToLeadStatus(temp) {
+  if (temp === "hot") return "IN_PROGRESS";
+  if (temp === "warm") return "OPEN";
+  return "NEW";
+}
+
+async function syncToHubSpot(lead, token) {
+  const descParts = [];
+  if (lead.products && lead.products.length) descParts.push("Product interest: " + lead.products.join(", "));
+  if (lead.followup) descParts.push("Follow-up: " + lead.followup);
+  if (lead.notes) descParts.push("Notes: " + lead.notes);
+  descParts.push("Captured by: " + (lead.capturedByName || lead.capturedBy || "Unknown"));
+  descParts.push("Source: Innotrans 2026, Berlin");
+  if (lead.scanned) descParts.push("Business card scanned: Yes");
+
+  const properties = {
+    firstname: lead.fname || "",
+    lastname: lead.lname || "",
+    email: lead.email || "",
+    phone: lead.phone || "",
+    company: lead.company || "",
+    jobtitle: lead.title || "",
+    lead_status: tempToLeadStatus(lead.temp),
+    description: descParts.join(" | "),
+  };
+
+  // Search for existing contact by email
+  let contactId = null;
+  const searchRes = await fetch("https://api.hubapi.com/crm/v3/objects/contacts/search", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+    body: JSON.stringify({
+      filterGroups: [{ filters: [{ propertyName: "email", operator: "EQ", value: lead.email }] }],
+      properties: ["id", "email"],
+      limit: 1,
+    }),
+  });
+
+  const searchText = await searchRes.text();
+  if (!searchRes.ok) throw new Error("HubSpot search failed (" + searchRes.status + "): " + searchText);
+  const searchData = JSON.parse(searchText);
+  if (searchData.results && searchData.results.length > 0) {
+    contactId = searchData.results[0].id;
+  }
+
+  // Create or update
+  let hubspotContactId;
+  if (contactId) {
+    const updateRes = await fetch("https://api.hubapi.com/crm/v3/objects/contacts/" + contactId, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({ properties }),
+    });
+    const updateText = await updateRes.text();
+    if (!updateRes.ok) throw new Error("HubSpot update failed (" + updateRes.status + "): " + updateText);
+    hubspotContactId = contactId;
+  } else {
+    const createRes = await fetch("https://api.hubapi.com/crm/v3/objects/contacts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+      body: JSON.stringify({ properties }),
+    });
+    const createText = await createRes.text();
+    if (!createRes.ok) throw new Error("HubSpot create failed (" + createRes.status + "): " + createText);
+    const created = JSON.parse(createText);
+    hubspotContactId = created.id;
+  }
+
+  return hubspotContactId;
+}
+
 export async function onRequest({ request, env }) {
   if (request.method === "OPTIONS") {
     return new Response(null, { headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE", "Access-Control-Allow-Headers": "Content-Type,Authorization" } });
@@ -46,8 +117,23 @@ export async function onRequest({ request, env }) {
     const existing = await env.LEADS.get(id, { type: "json" });
     if (!existing) return json({ error: "Lead not found" }, 404);
     if (session.role !== "manager" && existing.capturedBy !== session.userId) return json({ error: "Forbidden" }, 403);
+
     const updates = await request.json();
     const updated = { ...existing, ...updates, id, updatedAt: new Date().toISOString() };
+
+    // If syncing to HubSpot, call the API now
+    if (updates.synced === true) {
+      const HUBSPOT_TOKEN = env.HUBSPOT_TOKEN;
+      if (!HUBSPOT_TOKEN) return json({ error: "HUBSPOT_TOKEN not set in Cloudflare environment" }, 500);
+      try {
+        const hubspotContactId = await syncToHubSpot(updated, HUBSPOT_TOKEN);
+        updated.hubspotContactId = hubspotContactId;
+        updated.syncedAt = new Date().toISOString();
+      } catch (e) {
+        return json({ error: e.message }, 502);
+      }
+    }
+
     await env.LEADS.put(id, JSON.stringify(updated));
     return json(updated);
   }
