@@ -984,39 +984,30 @@ function updateMetrics() {
   document.getElementById('m-pending').textContent = allLeads.filter(l => !l.synced).length;
 }
 
-async function syncOne(id) {
-  // Disable the sync button immediately to prevent double-clicks
-  const btn = document.querySelector(`button[onclick="syncOne('${id}')"]`);
-  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-inline"></span>'; }
+PLACEHOLDER_SYNCONE
   try {
-    const updated = await api('/api/hubspot', { method: 'POST', body: JSON.stringify({ leadId: id }) });
+    const updated = await api('/api/leads?id=' + id, { method: 'PATCH', body: JSON.stringify({ synced: true }) });
     const idx = allLeads.findIndex(l => l.id === id);
     if (idx >= 0) allLeads[idx] = updated;
     renderLeads(); updateMetrics();
-    showToast('Lead synced to HubSpot ✓');
-  } catch(e) {
-    showToast('HubSpot sync failed — ' + (e.message || 'please try again'), false);
-    if (btn) { btn.disabled = false; btn.innerHTML = 'Sync'; }
-  }
+    showToast('Lead synced to HubSpot');
+  } catch(e) { showToast('Sync failed', false); }
 }
 
 async function syncAll() {
   const unsynced = allLeads.filter(l => !l.synced);
   if (!unsynced.length) { showToast('All leads already synced'); return; }
-  // Show syncing state on button
   const btn = document.querySelector('button[onclick="syncAll()"]');
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-inline"></span> Syncing…'; }
   let successCount = 0;
   let failCount = 0;
   for (const l of unsynced) {
     try {
-      const updated = await api('/api/hubspot', { method: 'POST', body: JSON.stringify({ leadId: l.id }) });
+      const updated = await api('/api/leads?id=' + l.id, { method: 'PATCH', body: JSON.stringify({ synced: true }) });
       const idx = allLeads.findIndex(x => x.id === l.id);
       if (idx >= 0) allLeads[idx] = updated;
       successCount++;
-    } catch(e) {
-      failCount++;
-    }
+    } catch(e) { failCount++; }
   }
   renderLeads(); updateMetrics();
   if (btn) {
@@ -1026,7 +1017,7 @@ async function syncAll() {
   if (failCount === 0) {
     showToast(successCount + ' lead' + (successCount > 1 ? 's' : '') + ' synced to HubSpot ✓');
   } else {
-    showToast(successCount + ' synced, ' + failCount + ' failed — check HubSpot token', false);
+    showToast(successCount + ' synced, ' + failCount + ' failed — ' + (failCount > 0 ? 'check token' : ''), false);
   }
 }
 
