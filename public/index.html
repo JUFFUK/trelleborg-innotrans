@@ -984,14 +984,19 @@ function updateMetrics() {
   document.getElementById('m-pending').textContent = allLeads.filter(l => !l.synced).length;
 }
 
-PLACEHOLDER_SYNCONE
+async function syncOne(id) {
+  const btn = document.querySelector(`button[onclick="syncOne('${id}')"]`);
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-inline"></span>'; }
   try {
     const updated = await api('/api/leads?id=' + id, { method: 'PATCH', body: JSON.stringify({ synced: true }) });
     const idx = allLeads.findIndex(l => l.id === id);
     if (idx >= 0) allLeads[idx] = updated;
     renderLeads(); updateMetrics();
-    showToast('Lead synced to HubSpot');
-  } catch(e) { showToast('Sync failed', false); }
+    showToast('Lead synced to HubSpot ✓');
+  } catch(e) {
+    showToast('HubSpot sync failed — ' + (e.message || 'please try again'), false);
+    if (btn) { btn.disabled = false; btn.innerHTML = 'Sync'; }
+  }
 }
 
 async function syncAll() {
@@ -1017,7 +1022,7 @@ async function syncAll() {
   if (failCount === 0) {
     showToast(successCount + ' lead' + (successCount > 1 ? 's' : '') + ' synced to HubSpot ✓');
   } else {
-    showToast(successCount + ' synced, ' + failCount + ' failed — ' + (failCount > 0 ? 'check token' : ''), false);
+    showToast(successCount + ' synced, ' + failCount + ' failed', false);
   }
 }
 
