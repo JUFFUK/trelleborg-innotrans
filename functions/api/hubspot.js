@@ -6,7 +6,7 @@
  * marks the lead as synced, and returns the updated lead.
  *
  * Required Cloudflare env variable: HUBSPOT_TOKEN
- * (HubSpot Private App token with crm.objects.contacts.write scope)
+ * (HubSpot Service Key with crm.objects.contacts.read + write scopes)
  */
 
 function json(data, status = 200) {
@@ -19,14 +19,13 @@ function json(data, status = 200) {
   });
 }
 
-function getAuthUser(request, env) {
+async function getAuthUser(request, env) {
   const authHeader = request.headers.get("Authorization") || "";
   const token = authHeader.replace("Bearer ", "").trim();
   if (!token) return null;
   return env.USERS.get("session:" + token, { type: "json" });
 }
 
-// Map lead temperature to a HubSpot lead status value
 function tempToLeadStatus(temp) {
   if (temp === "hot") return "IN_PROGRESS";
   if (temp === "warm") return "OPEN";
@@ -34,7 +33,6 @@ function tempToLeadStatus(temp) {
 }
 
 export async function onRequest({ request, env }) {
-  // CORS preflight
   if (request.method === "OPTIONS") {
     return new Response(null, {
       headers: {
@@ -49,7 +47,6 @@ export async function onRequest({ request, env }) {
     return json({ error: "Method not allowed" }, 405);
   }
 
-  // Auth check
   const user = await getAuthUser(request, env);
   if (!user) return json({ error: "Unauthorised" }, 401);
 
@@ -72,7 +69,17 @@ export async function onRequest({ request, env }) {
   const lead = await env.LEADS.get("lead:" + leadId, { type: "json" });
   if (!lead) return json({ error: "Lead not found" }, 404);
 
-  // Build HubSpot contact properties
+  // Build a description string combining all Innotrans context
+  const descParts = [];
+  if (lead.products && lead.products.length) {
+    descParts.push("Product interest: " + lead.products.join(", "));
+  }
+  if (lead.followup) descParts.push("Follow-up: " + lead.followup);
+  if (lead.notes) descParts.push("Notes: " + lead.notes);
+  descParts.push("Captured by: " + (lead.capturedByName || lead.capturedBy || "Unknown"));
+  descParts.push("Source: Innotrans 2026, Berlin");
+  if (lead.scanned) descParts.push("Business card scanned: Yes");
+
   const properties = {
     firstname: lead.fname || "",
     lastname: lead.lname || "",
@@ -81,29 +88,8 @@ export async function onRequest({ request, env }) {
     company: lead.company || "",
     jobtitle: lead.title || "",
     lead_status: tempToLeadStatus(lead.temp),
-    // Store Innotrans-specific data in notes / description fields
-    hs_lead_status: tempToLeadStatus(lead.temp),
-    notes_last_updated: new Date().toISOString(),
+    description: descParts.join(" | "),
   };
-
-  // Build a combined notes string to go into HubSpot
-  const notesParts = [];
-  if (lead.products && lead.products.length) {
-    notesParts.push("Product interest: " + lead.products.join(", "));
-  }
-  if (lead.followup) {
-    notesParts.push("Follow-up: " + lead.followup);
-  }
-  if (lead.notes) {
-    notesParts.push("Notes: " + lead.notes);
-  }
-  notesParts.push("Captured by: " + (lead.capturedByName || lead.capturedBy || "Unknown"));
-  notesParts.push("Source: Innotrans 2026, Berlin");
-  if (lead.scanned) notesParts.push("Business card scanned: Yes");
-
-  // HubSpot uses a separate Notes/Engagement API for notes,
-  // but we can also store a summary in the "description" property.
-  // We'll create a note engagement after contact creation.
 
   // ── Step 1: Search for existing contact by email ──
   let contactId = null;
@@ -142,7 +128,6 @@ export async function onRequest({ request, env }) {
       }
     }
   } catch (e) {
-    // Search failed — we'll try to create anyway
     console.error("HubSpot search error:", e);
   }
 
@@ -150,7 +135,6 @@ export async function onRequest({ request, env }) {
   let hubspotContactId;
 
   if (contactId) {
-    // Update existing contact
     const updateRes = await fetch(
       "https://api.hubapi.com/crm/v3/objects/contacts/" + contactId,
       {
@@ -170,7 +154,6 @@ export async function onRequest({ request, env }) {
 
     hubspotContactId = contactId;
   } else {
-    // Create new contact
     const createRes = await fetch(
       "https://api.hubapi.com/crm/v3/objects/contacts",
       {
@@ -192,36 +175,7 @@ export async function onRequest({ request, env }) {
     hubspotContactId = created.id;
   }
 
-  // ── Step 3: Create a Note engagement with the full context ──
-  if (notesParts.length && hubspotContactId) {
-    try {
-      await fetch("https://api.hubapi.com/engagements/v1/engagements", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer " + HUBSPOT_TOKEN,
-        },
-        body: JSON.stringify({
-          engagement: {
-            active: true,
-            type: "NOTE",
-            timestamp: Date.now(),
-          },
-          associations: {
-            contactIds: [parseInt(hubspotContactId)],
-          },
-          metadata: {
-            body: notesParts.join("\n"),
-          },
-        }),
-      });
-    } catch (e) {
-      // Note creation failing shouldn't block the overall sync
-      console.error("HubSpot note error:", e);
-    }
-  }
-
-  // ── Step 4: Mark lead as synced in KV ──
+  // ── Step 3: Mark lead as synced in KV ──
   lead.synced = true;
   lead.hubspotContactId = hubspotContactId;
   lead.syncedAt = new Date().toISOString();
