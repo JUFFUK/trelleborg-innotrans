@@ -985,24 +985,49 @@ function updateMetrics() {
 }
 
 async function syncOne(id) {
+  // Disable the sync button immediately to prevent double-clicks
+  const btn = document.querySelector(`button[onclick="syncOne('${id}')"]`);
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-inline"></span>'; }
   try {
-    const updated = await api('/api/leads?id=' + id, { method: 'PATCH', body: JSON.stringify({ synced: true }) });
+    const updated = await api('/api/hubspot', { method: 'POST', body: JSON.stringify({ leadId: id }) });
     const idx = allLeads.findIndex(l => l.id === id);
     if (idx >= 0) allLeads[idx] = updated;
     renderLeads(); updateMetrics();
-    showToast('Lead synced to HubSpot');
-  } catch(e) { showToast('Sync failed', false); }
+    showToast('Lead synced to HubSpot ✓');
+  } catch(e) {
+    showToast('HubSpot sync failed — ' + (e.message || 'please try again'), false);
+    if (btn) { btn.disabled = false; btn.innerHTML = 'Sync'; }
+  }
 }
 
 async function syncAll() {
   const unsynced = allLeads.filter(l => !l.synced);
   if (!unsynced.length) { showToast('All leads already synced'); return; }
-  try {
-    await Promise.all(unsynced.map(l => api('/api/leads?id=' + l.id, { method: 'PATCH', body: JSON.stringify({ synced: true }) })));
-    unsynced.forEach(l => l.synced = true);
-    renderLeads(); updateMetrics();
-    showToast(unsynced.length + ' lead' + (unsynced.length > 1 ? 's' : '') + ' synced to HubSpot');
-  } catch(e) { showToast('Sync failed', false); }
+  // Show syncing state on button
+  const btn = document.querySelector('button[onclick="syncAll()"]');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-inline"></span> Syncing…'; }
+  let successCount = 0;
+  let failCount = 0;
+  for (const l of unsynced) {
+    try {
+      const updated = await api('/api/hubspot', { method: 'POST', body: JSON.stringify({ leadId: l.id }) });
+      const idx = allLeads.findIndex(x => x.id === l.id);
+      if (idx >= 0) allLeads[idx] = updated;
+      successCount++;
+    } catch(e) {
+      failCount++;
+    }
+  }
+  renderLeads(); updateMetrics();
+  if (btn) {
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg> Sync all to HubSpot';
+  }
+  if (failCount === 0) {
+    showToast(successCount + ' lead' + (successCount > 1 ? 's' : '') + ' synced to HubSpot ✓');
+  } else {
+    showToast(successCount + ' synced, ' + failCount + ' failed — check HubSpot token', false);
+  }
 }
 
 async function deleteLead(id) {
