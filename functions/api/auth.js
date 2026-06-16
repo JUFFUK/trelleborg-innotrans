@@ -137,3 +137,4 @@ export async function onRequest({ request, env }) {
 
   return json({ error: "Not found" }, 404);
 }
+
