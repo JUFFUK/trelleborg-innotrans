@@ -1,11 +1,31 @@
-import bcrypt from "bcryptjs";
+// Pure Web Crypto — no external dependencies needed
+
+async function hashPassword(password) {
+  const encoder = new TextEncoder();
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const keyMaterial = await crypto.subtle.importKey("raw", encoder.encode(password), "PBKDF2", false, ["deriveBits"]);
+  const hashBuffer = await crypto.subtle.deriveBits({ name: "PBKDF2", salt, iterations: 100000, hash: "SHA-256" }, keyMaterial, 256);
+  const saltHex = Array.from(salt).map(b => b.toString(16).padStart(2, "0")).join("");
+  const hashHex = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
+  return saltHex + ":" + hashHex;
+}
+
+async function verifyPassword(password, stored) {
+  const encoder = new TextEncoder();
+  const [saltHex, hashHex] = stored.split(":");
+  if (!saltHex || !hashHex) return false;
+  const salt = new Uint8Array(saltHex.match(/.{2}/g).map(b => parseInt(b, 16)));
+  const keyMaterial = await crypto.subtle.importKey("raw", encoder.encode(password), "PBKDF2", false, ["deriveBits"]);
+  const hashBuffer = await crypto.subtle.deriveBits({ name: "PBKDF2", salt, iterations: 100000, hash: "SHA-256" }, keyMaterial, 256);
+  const newHashHex = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
+  return newHashHex === hashHex;
+}
 
 function generateToken() {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
   let token = "";
-  for (let i = 0; i < 64; i++) {
-    token += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
+  const arr = crypto.getRandomValues(new Uint8Array(64));
+  arr.forEach(b => { token += chars[b % chars.length]; });
   return token;
 }
 
@@ -30,7 +50,9 @@ export async function onRequest({ request, env }) {
     if (!email || !password) return json({ error: "Email and password required" }, 400);
     const user = await env.USERS.get("user:" + email.toLowerCase(), { type: "json" });
     if (!user) return json({ error: "Invalid email or password" }, 401);
-    const valid = await bcrypt.compare(password, user.passwordHash);
+    const valid = user.passwordHash
+      ? await verifyPassword(password, user.passwordHash)
+      : false;
     if (!valid) return json({ error: "Invalid email or password" }, 401);
     const token = generateToken();
     const expiry = Date.now() + 8 * 60 * 60 * 1000;
@@ -51,7 +73,7 @@ export async function onRequest({ request, env }) {
     if (adminSecret !== env.ADMIN_SECRET) return json({ error: "Invalid admin secret" }, 403);
     const existing = await env.USERS.get("user:" + email.toLowerCase());
     if (existing) return json({ error: "User already exists" }, 409);
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await hashPassword(password);
     await env.USERS.put("user:" + email.toLowerCase(), JSON.stringify({
       name, email: email.toLowerCase(),
       role: role === "manager" ? "manager" : "team",
