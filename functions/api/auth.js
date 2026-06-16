@@ -1,4 +1,3 @@
-
 import bcrypt from "bcryptjs";
 
 function generateToken() {
@@ -15,14 +14,6 @@ function json(data, status = 200) {
     status,
     headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
   });
-}
-
-async function getSession(request, env) {
-  const token = (request.headers.get("authorization") || "").replace("Bearer ", "").trim();
-  if (!token) return null;
-  const session = await env.USERS.get("session:" + token, { type: "json" });
-  if (!session || Date.now() > session.expiry) return null;
-  return session;
 }
 
 export async function onRequest({ request, env }) {
@@ -43,7 +34,6 @@ export async function onRequest({ request, env }) {
     if (!valid) return json({ error: "Invalid email or password" }, 401);
     const token = generateToken();
     const expiry = Date.now() + 8 * 60 * 60 * 1000;
-    // Update lastLoginAt on the user record
     await env.USERS.put("user:" + email.toLowerCase(), JSON.stringify({
       ...user,
       lastLoginAt: new Date().toISOString()
@@ -89,8 +79,10 @@ export async function onRequest({ request, env }) {
 
   // ── LIST USERS (manager only) ──
   if (request.method === "GET" && action === "list-users") {
-    const session = await getSession(request, env);
-    if (!session) return json({ error: "Unauthorised" }, 401);
+    const token = (request.headers.get("authorization") || "").replace("Bearer ", "").trim();
+    if (!token) return json({ error: "Unauthorised" }, 401);
+    const session = await env.USERS.get("session:" + token, { type: "json" });
+    if (!session || Date.now() > session.expiry) return json({ error: "Unauthorised" }, 401);
     if (session.role !== "manager") return json({ error: "Forbidden" }, 403);
     const list = await env.USERS.list({ prefix: "user:" });
     const users = await Promise.all(
@@ -109,8 +101,10 @@ export async function onRequest({ request, env }) {
 
   // ── DELETE USER (manager only) ──
   if (request.method === "POST" && action === "delete-user") {
-    const session = await getSession(request, env);
-    if (!session) return json({ error: "Unauthorised" }, 401);
+    const token = (request.headers.get("authorization") || "").replace("Bearer ", "").trim();
+    if (!token) return json({ error: "Unauthorised" }, 401);
+    const session = await env.USERS.get("session:" + token, { type: "json" });
+    if (!session || Date.now() > session.expiry) return json({ error: "Unauthorised" }, 401);
     if (session.role !== "manager") return json({ error: "Forbidden" }, 403);
     const { email } = await request.json();
     if (!email) return json({ error: "Email required" }, 400);
@@ -121,8 +115,10 @@ export async function onRequest({ request, env }) {
 
   // ── UPDATE USER ROLE (manager only) ──
   if (request.method === "POST" && action === "update-role") {
-    const session = await getSession(request, env);
-    if (!session) return json({ error: "Unauthorised" }, 401);
+    const token = (request.headers.get("authorization") || "").replace("Bearer ", "").trim();
+    if (!token) return json({ error: "Unauthorised" }, 401);
+    const session = await env.USERS.get("session:" + token, { type: "json" });
+    if (!session || Date.now() > session.expiry) return json({ error: "Unauthorised" }, 401);
     if (session.role !== "manager") return json({ error: "Forbidden" }, 403);
     const { email, role } = await request.json();
     if (!email || !role) return json({ error: "Email and role required" }, 400);
@@ -138,4 +134,3 @@ export async function onRequest({ request, env }) {
 
   return json({ error: "Not found" }, 404);
 }
-
