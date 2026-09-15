@@ -71,6 +71,7 @@ function publicFields(card) {
     name: card.name,
     title: card.title || "",
     function: card.function || "",
+    businessUnit: card.businessUnit || "",
     company: card.company || "Trelleborg Antivibration Solutions",
     email: card.email,
     phone: card.phone || "",
@@ -114,6 +115,7 @@ export async function onRequest({ request, env }) {
         name: u.name,
         title: (card && card.title) || "",
         function: (card && card.function) || "",
+        businessUnit: (card && card.businessUnit) || "",
         phone: (card && card.phone) || "",
         linkedin: (card && card.linkedin) || "",
         photoUrl: (card && card.photoUrl) || "",
@@ -165,7 +167,7 @@ export async function onRequest({ request, env }) {
   if (request.method === "PATCH") {
     const existing = await env.USERS.get("card:" + targetEmail, { type: "json" });
     const body = await request.json();
-    const allowed = ["title", "phone", "linkedin", "photoUrl", "function"];
+    const allowed = ["title", "phone", "linkedin", "photoUrl", "function", "businessUnit"];
     const updates = {};
     for (const key of allowed) {
       if (typeof body[key] === "string") updates[key] = body[key].trim();
