@@ -198,6 +198,13 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 #toast.show { opacity: 1; transform: translateY(0); }
 .admin-user-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 0.5px solid var(--border); }
 .admin-user-row:last-child { border-bottom: none; }
+.tc-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 0; border-bottom: 0.5px solid var(--border); }
+.tc-row:last-child { border-bottom: none; }
+.tc-who { width: 170px; flex-shrink: 0; }
+.tc-who .tc-name { font-weight: 500; color: var(--text); font-size: 13px; }
+.tc-who .tc-email { font-size: 11px; color: var(--text-hint); }
+.tc-input { font-family: 'DM Sans', sans-serif; font-size: 13px; padding: 8px 10px; border: 0.5px solid var(--border-mid); border-radius: 8px; outline: none; background: var(--surface); color: var(--text); }
+.tc-input:focus { border-color: var(--green); }
 
 @media (max-width: 640px) {
   .grid-2 { grid-template-columns: 1fr; gap: 0; }
@@ -416,6 +423,11 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
         <div class="card-title">Leads by team member</div>
         <div id="team-summary" style="font-size:13px;color:var(--text-muted)">Loading…</div>
       </div>
+      <div class="card">
+        <div class="card-title">Team cards</div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Fill in job titles, phone numbers and LinkedIn links on everyone's behalf ahead of the show. People can still edit their own under "My card".</p>
+        <div id="team-cards-list" style="font-size:13px;color:var(--text-muted)">Loading…</div>
+      </div>
     </div>
   </main>
 </div>
@@ -553,7 +565,7 @@ function switchTab(t) {
   });
   if (t === 'leads') loadLeads();
   if (t === 'card') loadCard();
-  if (t === 'admin') loadAdminSummary();
+  if (t === 'admin') { loadAdminSummary(); loadTeamCards(); }
 }
 
 async function loadCard() {
@@ -876,6 +888,53 @@ function loadAdminSummary() {
   container.innerHTML = Object.entries(byTeam).map(([name, s]) =>
     `<div class="admin-user-row"><span style="font-weight:500">${name}</span><span style="color:var(--text-muted)">${s.total} leads · ${s.hot} hot · ${s.synced} synced</span></div>`
   ).join('');
+}
+
+function escapeHtml(str) {
+  return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+async function loadTeamCards() {
+  const container = document.getElementById('team-cards-list');
+  container.textContent = 'Loading…';
+  try {
+    const cards = await api('/api/card?all=1');
+    if (!cards.length) { container.textContent = 'No team members found.'; return; }
+    container.innerHTML = cards.map(c => `
+      <div class="tc-row">
+        <div class="tc-who">
+          <div class="tc-name">${escapeHtml(c.name)}</div>
+          <div class="tc-email">${escapeHtml(c.email)}</div>
+        </div>
+        <input type="text" class="tc-input" style="flex:1;min-width:120px" placeholder="Job title" value="${escapeHtml(c.title)}" data-field="title" data-email="${escapeHtml(c.email)}">
+        <input type="tel" class="tc-input" style="width:130px" placeholder="Phone" value="${escapeHtml(c.phone)}" data-field="phone" data-email="${escapeHtml(c.email)}">
+        <input type="text" class="tc-input" style="flex:1;min-width:150px" placeholder="LinkedIn URL" value="${escapeHtml(c.linkedin)}" data-field="linkedin" data-email="${escapeHtml(c.email)}">
+        <button class="btn btn-sm" onclick="saveTeamCard('${escapeHtml(c.email)}', this)">Save</button>
+        ${c.slug ? `<a class="btn btn-sm" href="/card.html?id=${encodeURIComponent(c.slug)}" target="_blank" rel="noopener">View ↗</a>` : ''}
+      </div>
+    `).join('');
+  } catch(e) {
+    container.textContent = e.message;
+  }
+}
+
+async function saveTeamCard(email, btn) {
+  const inputs = document.querySelectorAll('.tc-input[data-email="' + CSS.escape(email) + '"]');
+  const body = {};
+  inputs.forEach(inp => { body[inp.dataset.field] = inp.value.trim(); });
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  try {
+    await api('/api/card?email=' + encodeURIComponent(email), { method: 'PATCH', body: JSON.stringify(body) });
+    showToast('Saved ' + email);
+    loadTeamCards();
+  } catch(e) {
+    showToast(e.message, false);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = original;
+  }
 }
 
 // Init
