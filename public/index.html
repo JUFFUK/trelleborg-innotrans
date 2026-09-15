@@ -258,6 +258,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
       <div class="nav-tabs">
         <button class="nav-tab active" id="tab-capture" onclick="switchTab('capture')">Capture</button>
         <button class="nav-tab" id="tab-leads" onclick="switchTab('leads')">Leads <span class="count-badge" id="lead-count-badge">0</span></button>
+        <button class="nav-tab" id="tab-card" onclick="switchTab('card')">My card</button>
         <button class="nav-tab" id="tab-admin" onclick="switchTab('admin')" style="display:none">Team</button>
       </div>
       <div class="user-pill">
@@ -357,6 +358,36 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
       <div id="leads-list"></div>
       <div id="leads-loading" style="text-align:center;padding:3rem 0;color:var(--text-muted);font-size:14px">Loading leads…</div>
       <p id="no-leads" style="font-size:14px;color:var(--text-muted);text-align:center;padding:3rem 0;display:none">No leads yet. Switch to Capture to add your first lead.</p>
+    </div>
+
+    <div id="view-card" style="display:none">
+      <div class="card">
+        <div class="card-title">Your digital business card</div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Fill this in once, then share your link or QR code at the stand so visitors can save your details straight to their phone.</p>
+        <div class="grid-2">
+          <div class="field"><label>Job title</label><input type="text" id="card-title" placeholder="e.g. Rail Sales Manager"></div>
+          <div class="field"><label>Phone</label><input type="tel" id="card-phone" placeholder="+44 7…"></div>
+          <div class="field"><label>LinkedIn URL</label><input type="text" id="card-linkedin" placeholder="https://linkedin.com/in/…"></div>
+          <div class="field"><label>Photo URL <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label><input type="text" id="card-photo" placeholder="Link to a headshot image"></div>
+        </div>
+        <button class="btn btn-primary" style="margin-top:8px" onclick="saveCard()" id="save-card-btn">Save card</button>
+      </div>
+
+      <div class="card" id="card-share-card" style="display:none">
+        <div class="card-title">Share your card</div>
+        <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start">
+          <img id="card-qr" style="width:160px;height:160px;border-radius:var(--radius);border:0.5px solid var(--border-mid)" alt="QR code linking to your card">
+          <div style="flex:1;min-width:220px">
+            <div class="field"><label>Your public link</label>
+              <div style="display:flex;gap:8px">
+                <input type="text" id="card-link" readonly style="flex:1">
+                <button class="btn btn-sm" onclick="copyCardLink()">Copy</button>
+              </div>
+            </div>
+            <a class="btn btn-sm" id="card-open-link" href="#" target="_blank" rel="noopener" style="display:inline-block;margin-top:4px">Open public card ↗</a>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div id="view-admin" style="display:none">
@@ -508,13 +539,66 @@ async function checkSession() {
 }
 
 function switchTab(t) {
-  ['capture','leads','admin'].forEach(v => {
+  ['capture','leads','card','admin'].forEach(v => {
     document.getElementById('view-' + v).style.display = v === t ? 'block' : 'none';
     const tab = document.getElementById('tab-' + v);
     if (tab) tab.classList.toggle('active', v === t);
   });
   if (t === 'leads') loadLeads();
+  if (t === 'card') loadCard();
   if (t === 'admin') loadAdminSummary();
+}
+
+async function loadCard() {
+  try {
+    const c = await api('/api/card');
+    document.getElementById('card-title').value = c.title || '';
+    document.getElementById('card-phone').value = c.phone || '';
+    document.getElementById('card-linkedin').value = c.linkedin || '';
+    document.getElementById('card-photo').value = c.photoUrl || '';
+    renderCardShare(c.slug, c.qrImageUrl);
+  } catch(e) {
+    showToast(e.message, false);
+  }
+}
+
+function renderCardShare(slug, qrImageUrl) {
+  if (!slug) return;
+  const link = window.location.origin + '/card.html?id=' + encodeURIComponent(slug);
+  document.getElementById('card-link').value = link;
+  document.getElementById('card-open-link').href = link;
+  document.getElementById('card-qr').src = qrImageUrl || ('https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=' + encodeURIComponent(link));
+  document.getElementById('card-share-card').style.display = 'block';
+}
+
+async function saveCard() {
+  const btn = document.getElementById('save-card-btn');
+  const original = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-inline"></span> Saving…';
+  try {
+    const body = {
+      title: document.getElementById('card-title').value.trim(),
+      phone: document.getElementById('card-phone').value.trim(),
+      linkedin: document.getElementById('card-linkedin').value.trim(),
+      photoUrl: document.getElementById('card-photo').value.trim()
+    };
+    const c = await api('/api/card', { method: 'PATCH', body: JSON.stringify(body) });
+    renderCardShare(c.slug, c.qrImageUrl);
+    showToast('Card saved');
+  } catch(e) {
+    showToast(e.message, false);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = original;
+  }
+}
+
+function copyCardLink() {
+  const input = document.getElementById('card-link');
+  input.select();
+  input.setSelectionRange(0, 99999);
+  navigator.clipboard.writeText(input.value).then(() => showToast('Link copied')).catch(() => showToast('Could not copy link, select and copy manually', false));
 }
 
 function showToast(msg, ok=true) {
