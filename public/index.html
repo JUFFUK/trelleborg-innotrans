@@ -415,18 +415,16 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 
       <div class="card">
         <div class="card-title">Share a team member's card</div>
-        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Talking to a visitor who wants to speak to an engineer, or someone from sales? Find a colleague's card here and pass on their link.</p>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
-          <select id="tc-filter-function" class="tc-input" onchange="renderShareDirectory()">
-            <option value="">All functions</option>
-            <option value="Sales">Sales</option>
-            <option value="Engineering">Engineering</option>
-            <option value="Marketing">Marketing</option>
-            <option value="Management">Management</option>
-            <option value="Support">Support</option>
-          </select>
-          <input type="text" id="tc-filter-search" class="tc-input" placeholder="Search by name" style="flex:1;min-width:160px" oninput="renderShareDirectory()">
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Talking to a visitor who wants to speak to an engineer, or someone from sales? Tap a function to see who's who, or search by name.</p>
+        <div id="tc-filter-buttons" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+          <button type="button" class="btn btn-sm btn-success tc-filter-btn" data-function="" onclick="setFunctionFilter('')">All</button>
+          <button type="button" class="btn btn-sm tc-filter-btn" data-function="Sales" onclick="setFunctionFilter('Sales')">Sales</button>
+          <button type="button" class="btn btn-sm tc-filter-btn" data-function="Engineering" onclick="setFunctionFilter('Engineering')">Engineering</button>
+          <button type="button" class="btn btn-sm tc-filter-btn" data-function="Marketing" onclick="setFunctionFilter('Marketing')">Marketing</button>
+          <button type="button" class="btn btn-sm tc-filter-btn" data-function="Management" onclick="setFunctionFilter('Management')">Management</button>
+          <button type="button" class="btn btn-sm tc-filter-btn" data-function="Support" onclick="setFunctionFilter('Support')">Support</button>
         </div>
+        <input type="text" id="tc-filter-search" class="tc-input" placeholder="Or search by name" style="width:100%;margin-bottom:12px" oninput="renderShareDirectory()">
         <div id="share-team-list" style="font-size:13px;color:var(--text-muted)">Loading…</div>
       </div>
     </div>
@@ -660,6 +658,7 @@ function renderCardShare(slug, qrImageUrl) {
 }
 
 let teamCardDirectory = [];
+let activeFunctionFilter = '';
 
 async function loadShareDirectory() {
   const container = document.getElementById('share-team-list');
@@ -672,12 +671,19 @@ async function loadShareDirectory() {
   }
 }
 
+function setFunctionFilter(fn) {
+  activeFunctionFilter = fn;
+  document.querySelectorAll('.tc-filter-btn').forEach(btn => {
+    btn.classList.toggle('btn-success', btn.dataset.function === fn);
+  });
+  renderShareDirectory();
+}
+
 function renderShareDirectory() {
-  const fn = document.getElementById('tc-filter-function').value;
   const q = document.getElementById('tc-filter-search').value.trim().toLowerCase();
   const container = document.getElementById('share-team-list');
   let list = teamCardDirectory.filter(c => c.slug && c.email !== currentUser.email);
-  if (fn) list = list.filter(c => c.function === fn);
+  if (activeFunctionFilter) list = list.filter(c => c.function === activeFunctionFilter);
   if (q) list = list.filter(c => c.name.toLowerCase().includes(q));
   if (!list.length) { container.textContent = 'No matching team members with a card set up yet.'; return; }
   container.innerHTML = list.map(c => `
@@ -686,15 +692,19 @@ function renderShareDirectory() {
         <div class="tc-name">${escapeHtml(c.name)}</div>
         <div class="tc-email">${escapeHtml(c.title || c.function || '')}</div>
       </div>
-      <button class="btn btn-sm" onclick="copyShareLink('${escapeHtml(c.slug)}')">Copy link</button>
+      <button class="btn btn-sm btn-primary" onclick="shareCard('${escapeHtml(c.slug)}', '${escapeHtml(c.name)}')">Share</button>
       <a class="btn btn-sm" href="/card.html?id=${encodeURIComponent(c.slug)}" target="_blank" rel="noopener">View ↗</a>
     </div>
   `).join('');
 }
 
-function copyShareLink(slug) {
+function shareCard(slug, name) {
   const link = window.location.origin + '/card.html?id=' + encodeURIComponent(slug);
-  navigator.clipboard.writeText(link).then(() => showToast('Link copied')).catch(() => showToast('Could not copy link, select and copy manually', false));
+  if (navigator.share) {
+    navigator.share({ title: name + ' — Trelleborg', text: name + "'s digital business card", url: link }).catch(() => {});
+  } else {
+    navigator.clipboard.writeText(link).then(() => showToast('Link copied')).catch(() => showToast('Could not copy link, select and copy manually', false));
+  }
 }
 
 async function saveCard() {
