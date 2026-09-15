@@ -373,6 +373,16 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
         <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Fill this in once, then share your link or QR code at the stand so visitors can save your details straight to their phone.</p>
         <div class="grid-2">
           <div class="field"><label>Job title</label><input type="text" id="card-title" placeholder="e.g. Rail Sales Manager"></div>
+          <div class="field"><label>Function</label>
+            <select id="card-function">
+              <option value="">Select a function</option>
+              <option value="Sales">Sales</option>
+              <option value="Engineering">Engineering</option>
+              <option value="Marketing">Marketing</option>
+              <option value="Management">Management</option>
+              <option value="Support">Support</option>
+            </select>
+          </div>
           <div class="field"><label>Phone</label><input type="tel" id="card-phone" placeholder="+44 7…"></div>
           <div class="field"><label>LinkedIn URL</label><input type="text" id="card-linkedin" placeholder="https://linkedin.com/in/…"></div>
           <div class="field"><label>Headshot photo <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
@@ -401,6 +411,23 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
             <a class="btn btn-sm" id="card-open-link" href="#" target="_blank" rel="noopener" style="display:inline-block;margin-top:4px">Open public card ↗</a>
           </div>
         </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Share a team member's card</div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Talking to a visitor who wants to speak to an engineer, or someone from sales? Find a colleague's card here and pass on their link.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+          <select id="tc-filter-function" class="tc-input" onchange="renderShareDirectory()">
+            <option value="">All functions</option>
+            <option value="Sales">Sales</option>
+            <option value="Engineering">Engineering</option>
+            <option value="Marketing">Marketing</option>
+            <option value="Management">Management</option>
+            <option value="Support">Support</option>
+          </select>
+          <input type="text" id="tc-filter-search" class="tc-input" placeholder="Search by name" style="flex:1;min-width:160px" oninput="renderShareDirectory()">
+        </div>
+        <div id="share-team-list" style="font-size:13px;color:var(--text-muted)">Loading…</div>
       </div>
     </div>
 
@@ -572,6 +599,7 @@ async function loadCard() {
   try {
     const c = await api('/api/card');
     document.getElementById('card-title').value = c.title || '';
+    document.getElementById('card-function').value = c.function || '';
     document.getElementById('card-phone').value = c.phone || '';
     document.getElementById('card-linkedin').value = c.linkedin || '';
     document.getElementById('card-photo').value = c.photoUrl || '';
@@ -580,6 +608,7 @@ async function loadCard() {
   } catch(e) {
     showToast(e.message, false);
   }
+  loadShareDirectory();
 }
 
 function setCardPhotoPreview(url) {
@@ -630,6 +659,44 @@ function renderCardShare(slug, qrImageUrl) {
   document.getElementById('card-share-card').style.display = 'block';
 }
 
+let teamCardDirectory = [];
+
+async function loadShareDirectory() {
+  const container = document.getElementById('share-team-list');
+  container.textContent = 'Loading…';
+  try {
+    teamCardDirectory = await api('/api/card?all=1');
+    renderShareDirectory();
+  } catch(e) {
+    container.textContent = e.message;
+  }
+}
+
+function renderShareDirectory() {
+  const fn = document.getElementById('tc-filter-function').value;
+  const q = document.getElementById('tc-filter-search').value.trim().toLowerCase();
+  const container = document.getElementById('share-team-list');
+  let list = teamCardDirectory.filter(c => c.slug && c.email !== currentUser.email);
+  if (fn) list = list.filter(c => c.function === fn);
+  if (q) list = list.filter(c => c.name.toLowerCase().includes(q));
+  if (!list.length) { container.textContent = 'No matching team members with a card set up yet.'; return; }
+  container.innerHTML = list.map(c => `
+    <div class="tc-row">
+      <div class="tc-who">
+        <div class="tc-name">${escapeHtml(c.name)}</div>
+        <div class="tc-email">${escapeHtml(c.title || c.function || '')}</div>
+      </div>
+      <button class="btn btn-sm" onclick="copyShareLink('${escapeHtml(c.slug)}')">Copy link</button>
+      <a class="btn btn-sm" href="/card.html?id=${encodeURIComponent(c.slug)}" target="_blank" rel="noopener">View ↗</a>
+    </div>
+  `).join('');
+}
+
+function copyShareLink(slug) {
+  const link = window.location.origin + '/card.html?id=' + encodeURIComponent(slug);
+  navigator.clipboard.writeText(link).then(() => showToast('Link copied')).catch(() => showToast('Could not copy link, select and copy manually', false));
+}
+
 async function saveCard() {
   const btn = document.getElementById('save-card-btn');
   const original = btn.innerHTML;
@@ -638,6 +705,7 @@ async function saveCard() {
   try {
     const body = {
       title: document.getElementById('card-title').value.trim(),
+      function: document.getElementById('card-function').value,
       phone: document.getElementById('card-phone').value.trim(),
       linkedin: document.getElementById('card-linkedin').value.trim(),
       photoUrl: document.getElementById('card-photo').value.trim()
@@ -894,6 +962,11 @@ function escapeHtml(str) {
   return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+function functionOptionsHtml(selected) {
+  const opts = ['', 'Sales', 'Engineering', 'Marketing', 'Management', 'Support'];
+  return opts.map(f => `<option value="${f}"${selected === f ? ' selected' : ''}>${f || 'No function'}</option>`).join('');
+}
+
 async function loadTeamCards() {
   const container = document.getElementById('team-cards-list');
   container.textContent = 'Loading…';
@@ -907,6 +980,7 @@ async function loadTeamCards() {
           <div class="tc-email">${escapeHtml(c.email)}</div>
         </div>
         <input type="text" class="tc-input" style="flex:1;min-width:120px" placeholder="Job title" value="${escapeHtml(c.title)}" data-field="title" data-email="${escapeHtml(c.email)}">
+        <select class="tc-input" data-field="function" data-email="${escapeHtml(c.email)}">${functionOptionsHtml(c.function)}</select>
         <input type="tel" class="tc-input" style="width:130px" placeholder="Phone" value="${escapeHtml(c.phone)}" data-field="phone" data-email="${escapeHtml(c.email)}">
         <input type="text" class="tc-input" style="flex:1;min-width:150px" placeholder="LinkedIn URL" value="${escapeHtml(c.linkedin)}" data-field="linkedin" data-email="${escapeHtml(c.email)}">
         <button class="btn btn-sm" onclick="saveTeamCard('${escapeHtml(c.email)}', this)">Save</button>
