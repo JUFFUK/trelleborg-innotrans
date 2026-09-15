@@ -383,6 +383,15 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
               <option value="Support">Support</option>
             </select>
           </div>
+          <div class="field"><label>Business unit</label>
+            <select id="card-business-unit">
+              <option value="">Select a business unit</option>
+              <option value="AVS">AVS</option>
+              <option value="TSS">TSS</option>
+              <option value="S&amp;P">S&amp;P</option>
+              <option value="ECF">ECF</option>
+            </select>
+          </div>
           <div class="field"><label>Phone</label><input type="tel" id="card-phone" placeholder="+44 7…"></div>
           <div class="field"><label>LinkedIn URL</label><input type="text" id="card-linkedin" placeholder="https://linkedin.com/in/…"></div>
           <div class="field"><label>Headshot photo <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
@@ -415,14 +424,21 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 
       <div class="card">
         <div class="card-title">Share a team member's card</div>
-        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Talking to a visitor who wants to speak to an engineer, or someone from sales? Tap a function to see who's who, or search by name.</p>
-        <div id="tc-filter-buttons" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
-          <button type="button" class="btn btn-sm btn-success tc-filter-btn" data-function="" onclick="setFunctionFilter('')">All</button>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Talking to a visitor who wants to speak to an engineer, or someone from sales? Tap a function or business unit to see who's who, or search by name.</p>
+        <div id="tc-filter-buttons" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+          <button type="button" class="btn btn-sm btn-success tc-filter-btn" data-function="" onclick="setFunctionFilter('')">All functions</button>
           <button type="button" class="btn btn-sm tc-filter-btn" data-function="Sales" onclick="setFunctionFilter('Sales')">Sales</button>
           <button type="button" class="btn btn-sm tc-filter-btn" data-function="Engineering" onclick="setFunctionFilter('Engineering')">Engineering</button>
           <button type="button" class="btn btn-sm tc-filter-btn" data-function="Marketing" onclick="setFunctionFilter('Marketing')">Marketing</button>
           <button type="button" class="btn btn-sm tc-filter-btn" data-function="Management" onclick="setFunctionFilter('Management')">Management</button>
           <button type="button" class="btn btn-sm tc-filter-btn" data-function="Support" onclick="setFunctionFilter('Support')">Support</button>
+        </div>
+        <div id="tc-filter-bu-buttons" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+          <button type="button" class="btn btn-sm btn-success tc-filter-bu-btn" data-bu="" onclick="setBuFilter('')">All business units</button>
+          <button type="button" class="btn btn-sm tc-filter-bu-btn" data-bu="AVS" onclick="setBuFilter('AVS')">AVS</button>
+          <button type="button" class="btn btn-sm tc-filter-bu-btn" data-bu="TSS" onclick="setBuFilter('TSS')">TSS</button>
+          <button type="button" class="btn btn-sm tc-filter-bu-btn" data-bu="S&amp;P" onclick="setBuFilter('S&amp;P')">S&amp;P</button>
+          <button type="button" class="btn btn-sm tc-filter-bu-btn" data-bu="ECF" onclick="setBuFilter('ECF')">ECF</button>
         </div>
         <input type="text" id="tc-filter-search" class="tc-input" placeholder="Or search by name" style="width:100%;margin-bottom:12px" oninput="renderShareDirectory()">
         <div id="share-team-list" style="font-size:13px;color:var(--text-muted)">Loading…</div>
@@ -598,6 +614,7 @@ async function loadCard() {
     const c = await api('/api/card');
     document.getElementById('card-title').value = c.title || '';
     document.getElementById('card-function').value = c.function || '';
+    document.getElementById('card-business-unit').value = c.businessUnit || '';
     document.getElementById('card-phone').value = c.phone || '';
     document.getElementById('card-linkedin').value = c.linkedin || '';
     document.getElementById('card-photo').value = c.photoUrl || '';
@@ -659,6 +676,7 @@ function renderCardShare(slug, qrImageUrl) {
 
 let teamCardDirectory = [];
 let activeFunctionFilter = '';
+let activeBuFilter = '';
 
 async function loadShareDirectory() {
   const container = document.getElementById('share-team-list');
@@ -679,18 +697,27 @@ function setFunctionFilter(fn) {
   renderShareDirectory();
 }
 
+function setBuFilter(bu) {
+  activeBuFilter = bu;
+  document.querySelectorAll('.tc-filter-bu-btn').forEach(btn => {
+    btn.classList.toggle('btn-success', btn.dataset.bu === bu);
+  });
+  renderShareDirectory();
+}
+
 function renderShareDirectory() {
   const q = document.getElementById('tc-filter-search').value.trim().toLowerCase();
   const container = document.getElementById('share-team-list');
   let list = teamCardDirectory.filter(c => c.slug && c.email !== currentUser.email);
   if (activeFunctionFilter) list = list.filter(c => c.function === activeFunctionFilter);
+  if (activeBuFilter) list = list.filter(c => c.businessUnit === activeBuFilter);
   if (q) list = list.filter(c => c.name.toLowerCase().includes(q));
   if (!list.length) { container.textContent = 'No matching team members with a card set up yet.'; return; }
   container.innerHTML = list.map(c => `
     <div class="tc-row">
       <div class="tc-who">
         <div class="tc-name">${escapeHtml(c.name)}</div>
-        <div class="tc-email">${escapeHtml(c.title || c.function || '')}</div>
+        <div class="tc-email">${escapeHtml([c.title, c.businessUnit].filter(Boolean).join(' · ') || c.function || '')}</div>
       </div>
       <button class="btn btn-sm btn-primary" onclick="shareCard('${escapeHtml(c.slug)}', '${escapeHtml(c.name)}')">Share</button>
       <a class="btn btn-sm" href="/card.html?id=${encodeURIComponent(c.slug)}" target="_blank" rel="noopener">View ↗</a>
@@ -716,6 +743,7 @@ async function saveCard() {
     const body = {
       title: document.getElementById('card-title').value.trim(),
       function: document.getElementById('card-function').value,
+      businessUnit: document.getElementById('card-business-unit').value,
       phone: document.getElementById('card-phone').value.trim(),
       linkedin: document.getElementById('card-linkedin').value.trim(),
       photoUrl: document.getElementById('card-photo').value.trim()
@@ -977,6 +1005,11 @@ function functionOptionsHtml(selected) {
   return opts.map(f => `<option value="${f}"${selected === f ? ' selected' : ''}>${f || 'No function'}</option>`).join('');
 }
 
+function buOptionsHtml(selected) {
+  const opts = ['', 'AVS', 'TSS', 'S&P', 'ECF'];
+  return opts.map(b => `<option value="${b}"${selected === b ? ' selected' : ''}>${b || 'No business unit'}</option>`).join('');
+}
+
 async function loadTeamCards() {
   const container = document.getElementById('team-cards-list');
   container.textContent = 'Loading…';
@@ -991,6 +1024,7 @@ async function loadTeamCards() {
         </div>
         <input type="text" class="tc-input" style="flex:1;min-width:120px" placeholder="Job title" value="${escapeHtml(c.title)}" data-field="title" data-email="${escapeHtml(c.email)}">
         <select class="tc-input" data-field="function" data-email="${escapeHtml(c.email)}">${functionOptionsHtml(c.function)}</select>
+        <select class="tc-input" data-field="businessUnit" data-email="${escapeHtml(c.email)}">${buOptionsHtml(c.businessUnit)}</select>
         <input type="tel" class="tc-input" style="width:130px" placeholder="Phone" value="${escapeHtml(c.phone)}" data-field="phone" data-email="${escapeHtml(c.email)}">
         <input type="text" class="tc-input" style="flex:1;min-width:150px" placeholder="LinkedIn URL" value="${escapeHtml(c.linkedin)}" data-field="linkedin" data-email="${escapeHtml(c.email)}">
         <button class="btn btn-sm" onclick="saveTeamCard('${escapeHtml(c.email)}', this)">Save</button>
