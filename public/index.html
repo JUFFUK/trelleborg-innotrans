@@ -8,7 +8,6 @@
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  
 
 :root {
   --radius: 10px;
@@ -369,7 +368,14 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
           <div class="field"><label>Job title</label><input type="text" id="card-title" placeholder="e.g. Rail Sales Manager"></div>
           <div class="field"><label>Phone</label><input type="tel" id="card-phone" placeholder="+44 7…"></div>
           <div class="field"><label>LinkedIn URL</label><input type="text" id="card-linkedin" placeholder="https://linkedin.com/in/…"></div>
-          <div class="field"><label>Photo URL <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label><input type="text" id="card-photo" placeholder="Link to a headshot image"></div>
+          <div class="field"><label>Headshot photo <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
+            <div style="display:flex;align-items:center;gap:12px">
+              <div id="card-photo-preview" style="width:52px;height:52px;border-radius:50%;background:var(--bg);border:0.5px solid var(--border-mid);overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text-hint);text-align:center">No photo</div>
+              <button type="button" class="btn btn-sm" onclick="document.getElementById('card-photo-file').click()">Upload photo</button>
+              <input type="file" id="card-photo-file" accept="image/*" capture="user" style="display:none" onchange="uploadCardPhoto(this.files[0])">
+            </div>
+            <input type="hidden" id="card-photo">
+          </div>
         </div>
         <button class="btn btn-primary" style="margin-top:8px" onclick="saveCard()" id="save-card-btn">Save card</button>
       </div>
@@ -557,10 +563,50 @@ async function loadCard() {
     document.getElementById('card-phone').value = c.phone || '';
     document.getElementById('card-linkedin').value = c.linkedin || '';
     document.getElementById('card-photo').value = c.photoUrl || '';
+    setCardPhotoPreview(c.photoUrl);
     renderCardShare(c.slug, c.qrImageUrl);
   } catch(e) {
     showToast(e.message, false);
   }
+}
+
+function setCardPhotoPreview(url) {
+  const preview = document.getElementById('card-photo-preview');
+  preview.innerHTML = url ? '<img src="' + url + '" style="width:100%;height:100%;object-fit:cover">' : 'No photo';
+}
+
+function uploadCardPhoto(file) {
+  if (!file) return;
+  const preview = document.getElementById('card-photo-preview');
+  preview.innerHTML = '<span class="spinner-inline"></span>';
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const img = new Image();
+    img.onload = function() {
+      const maxDim = 480;
+      let w = img.width, h = img.height;
+      if (w >= h && w > maxDim) { h = Math.round(h * maxDim / w); w = maxDim; }
+      else if (h > w && h > maxDim) { w = Math.round(w * maxDim / h); h = maxDim; }
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      document.getElementById('card-photo').value = dataUrl;
+      setCardPhotoPreview(dataUrl);
+      showToast('Photo added, click Save card to keep it');
+    };
+    img.onerror = function() {
+      setCardPhotoPreview(document.getElementById('card-photo').value);
+      showToast('Could not read that image', false);
+    };
+    img.src = e.target.result;
+  };
+  reader.onerror = function() {
+    setCardPhotoPreview(document.getElementById('card-photo').value);
+    showToast('Could not read that file', false);
+  };
+  reader.readAsDataURL(file);
 }
 
 function renderCardShare(slug, qrImageUrl) {
