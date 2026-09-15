@@ -70,6 +70,7 @@ function publicFields(card) {
     slug: card.slug,
     name: card.name,
     title: card.title || "",
+    function: card.function || "",
     company: card.company || "Trelleborg Antivibration Solutions",
     email: card.email,
     phone: card.phone || "",
@@ -102,9 +103,8 @@ export async function onRequest({ request, env }) {
   const session = await getSession(request, env);
   if (!session) return json({ error: "Unauthorised" }, 401);
 
-  // ── MANAGER: list every team member's card in one go ──
+  // ── LIST EVERY TEAM MEMBER'S CARD (any signed-in team member, to share colleagues' cards) ──
   if (request.method === "GET" && wantsAll) {
-    if (session.role !== "manager") return json({ error: "Forbidden" }, 403);
     const list = await env.USERS.list({ prefix: "user:" });
     const users = await Promise.all(list.keys.map(k => env.USERS.get(k.name, { type: "json" })));
     const results = await Promise.all(users.filter(Boolean).map(async u => {
@@ -113,6 +113,7 @@ export async function onRequest({ request, env }) {
         email: u.email,
         name: u.name,
         title: (card && card.title) || "",
+        function: (card && card.function) || "",
         phone: (card && card.phone) || "",
         linkedin: (card && card.linkedin) || "",
         photoUrl: (card && card.photoUrl) || "",
@@ -164,7 +165,7 @@ export async function onRequest({ request, env }) {
   if (request.method === "PATCH") {
     const existing = await env.USERS.get("card:" + targetEmail, { type: "json" });
     const body = await request.json();
-    const allowed = ["title", "phone", "linkedin", "photoUrl"];
+    const allowed = ["title", "phone", "linkedin", "photoUrl", "function"];
     const updates = {};
     for (const key of allowed) {
       if (typeof body[key] === "string") updates[key] = body[key].trim();
