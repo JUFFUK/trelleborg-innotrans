@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Digital business card — Trelleborg</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --radius: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --green: #0F6E56;
+  --green-light: #E1F5EE;
+  --green-text: #085041;
+  --bg: #F7F6F2;
+  --surface: #FFFFFF;
+  --border: rgba(0,0,0,0.08);
+  --border-mid: rgba(0,0,0,0.15);
+  --text: #1A1916;
+  --text-muted: #6B6860;
+  --text-hint: #A09D97;
+}
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  font-size: 14px;
+  line-height: 1.6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+}
+
+.card-wrap { width: 100%; max-width: 400px; }
+
+.logo-row { display: flex; justify-content: center; margin-bottom: 1.5rem; }
+.logo-row img { height: 36px; object-fit: contain; }
+
+.card {
+  background: var(--surface);
+  border: 0.5px solid var(--border-mid);
+  border-radius: var(--radius-xl);
+  padding: 2rem 1.75rem;
+  text-align: center;
+}
+
+.avatar {
+  width: 88px; height: 88px;
+  border-radius: 50%;
+  margin: 0 auto 1.25rem;
+  object-fit: cover;
+  background: var(--green-light);
+  color: var(--green-text);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px; font-weight: 600;
+  border: 0.5px solid var(--border-mid);
+}
+
+.name { font-size: 20px; font-weight: 600; margin-bottom: 2px; }
+.title { font-size: 14px; color: var(--text-muted); margin-bottom: 2px; }
+.company { font-size: 13px; color: var(--text-hint); margin-bottom: 1.5rem; }
+
+.links { display: flex; flex-direction: column; gap: 8px; margin-bottom: 1.5rem; text-align: left; }
+.link-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 0.5px solid var(--border-mid);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 14px;
+  transition: background 0.15s;
+}
+.link-row:hover { background: var(--bg); }
+.link-row .ico { width: 18px; text-align: center; flex-shrink: 0; }
+
+.btn {
+  display: block; width: 100%;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 15px; font-weight: 600;
+  padding: 13px 16px;
+  border-radius: var(--radius);
+  border: none; cursor: pointer;
+  text-decoration: none;
+  transition: opacity 0.15s;
+}
+.btn:hover { opacity: 0.9; }
+.btn-primary { background: var(--green); color: #fff; margin-bottom: 10px; }
+
+.qr-box { margin-top: 1.5rem; padding-top: 1.5rem; border-top: 0.5px solid var(--border); }
+.qr-box img { width: 140px; height: 140px; border-radius: var(--radius); border: 0.5px solid var(--border-mid); }
+.qr-label { font-size: 12px; color: var(--text-hint); margin-top: 8px; }
+
+.state-msg { text-align: center; color: var(--text-muted); font-size: 14px; padding: 2rem 0; }
+</style>
+</head>
+<body>
+
+<div class="card-wrap">
+  <div class="logo-row"><img src="/logo-light.svg" alt="Trelleborg"></div>
+  <div class="card" id="card-root">
+    <p class="state-msg" id="loading-msg">Loading card…</p>
+  </div>
+</div>
+
+<script>
+function getInitials(name) {
+  return (name || '').split(' ').filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+}
+
+function buildVCard(c) {
+  const parts = (c.name || '').trim().split(' ');
+  const given = parts.slice(0, -1).join(' ') || c.name || '';
+  const family = parts.length > 1 ? parts[parts.length - 1] : '';
+  const lines = [
+    'BEGIN:VCARD',
+    'VERSION:3.0',
+    'N:' + family + ';' + given + ';;;',
+    'FN:' + (c.name || ''),
+    'ORG:' + (c.company || ''),
+  ];
+  if (c.title) lines.push('TITLE:' + c.title);
+  if (c.phone) lines.push('TEL;TYPE=CELL,VOICE:' + c.phone);
+  if (c.email) lines.push('EMAIL;TYPE=WORK:' + c.email);
+  if (c.linkedin) lines.push('URL:' + c.linkedin);
+  lines.push('END:VCARD');
+  return lines.join('\r\n');
+}
+
+function downloadVCard(c) {
+  const blob = new Blob([buildVCard(c)], { type: 'text/vcard;charset=utf-8' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = (c.name || 'contact').replace(/[^a-z0-9]+/gi, '-') + '.vcf';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function render(c) {
+  const root = document.getElementById('card-root');
+  const avatar = c.photoUrl
+    ? '<img class="avatar" src="' + c.photoUrl + '" alt="' + c.name + '">'
+    : '<div class="avatar">' + getInitials(c.name) + '</div>';
+
+  let links = '';
+  if (c.phone) links += '<a class="link-row" href="tel:' + c.phone.replace(/\s+/g, '') + '"><span class="ico">📞</span>' + c.phone + '</a>';
+  if (c.email) links += '<a class="link-row" href="mailto:' + c.email + '"><span class="ico">✉️</span>' + c.email + '</a>';
+  if (c.linkedin) links += '<a class="link-row" href="' + c.linkedin + '" target="_blank" rel="noopener"><span class="ico">in</span>LinkedIn</a>';
+
+  const pageUrl = window.location.href;
+  const qrSrc = c.qrImageUrl || ('https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=' + encodeURIComponent(pageUrl));
+
+  root.innerHTML =
+    avatar +
+    '<div class="name">' + c.name + '</div>' +
+    (c.title ? '<div class="title">' + c.title + '</div>' : '') +
+    '<div class="company">' + (c.company || 'Trelleborg Antivibration Solutions') + '</div>' +
+    '<div class="links">' + links + '</div>' +
+    '<button class="btn btn-primary" id="save-btn">Save to contacts</button>' +
+    '<div class="qr-box">' +
+      '<img src="' + qrSrc + '" alt="QR code for this card">' +
+      '<div class="qr-label">Scan to open this card</div>' +
+    '</div>';
+
+  document.getElementById('save-btn').addEventListener('click', () => downloadVCard(c));
+}
+
+async function loadCard() {
+  const params = new URLSearchParams(window.location.search);
+  const id = params.get('id');
+  const root = document.getElementById('card-root');
+  if (!id) {
+    root.innerHTML = '<p class="state-msg">No card specified.</p>';
+    return;
+  }
+  try {
+    const res = await fetch('/api/card?slug=' + encodeURIComponent(id));
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Card not found');
+    render(data);
+  } catch (e) {
+    root.innerHTML = '<p class="state-msg">This card could not be found.</p>';
+  }
+}
+
+loadCard();
+</script>
+
+</body>
+</html>
