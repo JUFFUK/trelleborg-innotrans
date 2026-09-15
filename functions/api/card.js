@@ -86,6 +86,8 @@ export async function onRequest({ request, env }) {
 
   const url = new URL(request.url);
   const slug = url.searchParams.get("slug");
+  const emailParam = url.searchParams.get("email");
+  const wantsAll = url.searchParams.get("all") === "1";
 
   // ── PUBLIC LOOKUP (no auth, used by card.html) ──
   if (request.method === "GET" && slug) {
@@ -96,20 +98,53 @@ export async function onRequest({ request, env }) {
     return json(publicFields(card));
   }
 
-  // Everything below is the signed-in user managing their own card
+  // Everything below requires a signed-in session
   const session = await getSession(request, env);
   if (!session) return json({ error: "Unauthorised" }, 401);
 
-  // ── GET OWN CARD (creates a default one on first visit) ──
+  // ── MANAGER: list every team member's card in one go ──
+  if (request.method === "GET" && wantsAll) {
+    if (session.role !== "manager") return json({ error: "Forbidden" }, 403);
+    const list = await env.USERS.list({ prefix: "user:" });
+    const users = await Promise.all(list.keys.map(k => env.USERS.get(k.name, { type: "json" })));
+    const results = await Promise.all(users.filter(Boolean).map(async u => {
+      const card = await env.USERS.get("card:" + u.email, { type: "json" });
+      return {
+        email: u.email,
+        name: u.name,
+        title: (card && card.title) || "",
+        phone: (card && card.phone) || "",
+        linkedin: (card && card.linkedin) || "",
+        photoUrl: (card && card.photoUrl) || "",
+        slug: (card && card.slug) || ""
+      };
+    }));
+    results.sort((a, b) => a.name.localeCompare(b.name));
+    return json(results);
+  }
+
+  // Work out whose card this request is for: yourself, or, for managers
+  // only, another team member's via ?email=
+  let targetEmail = session.userId;
+  let targetName = session.name;
+  if (emailParam && emailParam.toLowerCase() !== session.userId) {
+    if (session.role !== "manager") return json({ error: "Forbidden" }, 403);
+    const targetUser = await env.USERS.get("user:" + emailParam.toLowerCase(), { type: "json" });
+    if (!targetUser) return json({ error: "User not found" }, 404);
+    targetEmail = targetUser.email;
+    targetName = targetUser.name;
+  }
+
+  // ── GET A CARD (creates a default one on first visit) ──
   if (request.method === "GET") {
-    let card = await env.USERS.get("card:" + session.userId, { type: "json" });
+    let card = await env.USERS.get("card:" + targetEmail, { type: "json" });
     if (!card) {
-      const newSlug = await uniqueSlug(slugify(session.name), env, session.userId);
+      const newSlug = await uniqueSlug(slugify(targetName), env, targetEmail);
       const publicUrl = url.origin + "/card.html?id=" + newSlug;
-      const qrImageUrl = await generateQrIo(publicUrl, session.name + " — Trelleborg", env);
+      const qrImageUrl = await generateQrIo(publicUrl, targetName + " — Trelleborg", env);
       card = {
-        email: session.userId,
-        name: session.name,
+        email: targetEmail,
+        name: targetName,
         title: "",
         company: "Trelleborg Antivibration Solutions",
         phone: "",
@@ -119,15 +154,15 @@ export async function onRequest({ request, env }) {
         qrImageUrl: qrImageUrl || "",
         createdAt: new Date().toISOString()
       };
-      await env.USERS.put("card:" + session.userId, JSON.stringify(card));
-      await env.USERS.put("cardslug:" + newSlug, session.userId);
+      await env.USERS.put("card:" + targetEmail, JSON.stringify(card));
+      await env.USERS.put("cardslug:" + newSlug, targetEmail);
     }
     return json(card);
   }
 
-  // ── UPDATE OWN CARD ──
+  // ── UPDATE A CARD ──
   if (request.method === "PATCH") {
-    const existing = await env.USERS.get("card:" + session.userId, { type: "json" });
+    const existing = await env.USERS.get("card:" + targetEmail, { type: "json" });
     const body = await request.json();
     const allowed = ["title", "phone", "linkedin", "photoUrl"];
     const updates = {};
@@ -136,26 +171,26 @@ export async function onRequest({ request, env }) {
     }
     const card = {
       ...(existing || {
-        email: session.userId,
-        name: session.name,
+        email: targetEmail,
+        name: targetName,
         company: "Trelleborg Antivibration Solutions",
         createdAt: new Date().toISOString()
       }),
       ...updates,
-      email: session.userId,
-      name: session.name,
+      email: targetEmail,
+      name: targetName,
       updatedAt: new Date().toISOString()
     };
     if (!card.slug) {
-      card.slug = await uniqueSlug(slugify(session.name), env, session.userId);
-      await env.USERS.put("cardslug:" + card.slug, session.userId);
+      card.slug = await uniqueSlug(slugify(targetName), env, targetEmail);
+      await env.USERS.put("cardslug:" + card.slug, targetEmail);
     }
     if (!card.qrImageUrl) {
       const publicUrl = url.origin + "/card.html?id=" + card.slug;
-      const qrImageUrl = await generateQrIo(publicUrl, session.name + " — Trelleborg", env);
+      const qrImageUrl = await generateQrIo(publicUrl, targetName + " — Trelleborg", env);
       if (qrImageUrl) card.qrImageUrl = qrImageUrl;
     }
-    await env.USERS.put("card:" + session.userId, JSON.stringify(card));
+    await env.USERS.put("card:" + targetEmail, JSON.stringify(card));
     return json(card);
   }
 
