@@ -123,11 +123,20 @@ export async function onRequest({ request, env }) {
 
     for (const row of rows) {
       const fullName = `${row.firstName || ""} ${row.lastName || ""}`.trim();
-      if (!fullName) continue;
-      const target = normalizeName(fullName);
-      const user = allUsers.find(u => normalizeName(u.name) === target);
+      const rowEmail = (row.email || "").trim().toLowerCase();
+      if (!fullName && !rowEmail) continue;
+
+      // Prefer matching by email, given directly, over matching by name
+      let user = null;
+      if (rowEmail) {
+        user = allUsers.find(u => u.email.toLowerCase() === rowEmail);
+      }
+      if (!user && fullName) {
+        const target = normalizeName(fullName);
+        user = allUsers.find(u => normalizeName(u.name) === target);
+      }
       if (!user) {
-        unmatched.push(fullName);
+        unmatched.push(fullName || rowEmail);
         continue;
       }
 
@@ -138,6 +147,7 @@ export async function onRequest({ request, env }) {
       if (functionValue && businessUnitValue && functionValue.toLowerCase() === businessUnitValue.toLowerCase()) {
         functionValue = "";
       }
+      const jobTitleValue = (row.jobTitle || "").trim();
 
       const existing = await env.USERS.get("card:" + user.email, { type: "json" });
       const card = {
@@ -149,6 +159,7 @@ export async function onRequest({ request, env }) {
         }),
         email: user.email,
         name: user.name,
+        title: jobTitleValue || (existing && existing.title) || "",
         function: functionValue,
         businessUnit: businessUnitValue,
         updatedAt: new Date().toISOString()
