@@ -1110,11 +1110,15 @@ function generateTempPassword() {
   return pw;
 }
 
-function renderBulkResult(result, created) {
+function renderBulkResult(result, created, registerErrors) {
   let html = `<div style="color:var(--green-text);font-weight:500;margin-bottom:6px">Matched and updated ${result.matched.length}</div>`;
   if (created && created.length) {
     html += `<div style="font-weight:500;margin-bottom:6px">Created ${created.length} new account${created.length === 1 ? '' : 's'}, share these temporary passwords so they can log in and change them:</div>`;
     html += `<ul style="margin:0 0 12px 18px">${created.map(c => `<li>${escapeHtml(c.name)} — ${escapeHtml(c.email)} — <code>${escapeHtml(c.password)}</code></li>`).join('')}</ul>`;
+  }
+  if (registerErrors && registerErrors.length) {
+    html += `<div style="color:var(--red);font-weight:500;margin-bottom:6px">Could not create ${registerErrors.length} account${registerErrors.length === 1 ? '' : 's'}:</div>`;
+    html += `<ul style="margin:0 0 12px 18px">${registerErrors.map(e => `<li>${escapeHtml(e.name)} (${escapeHtml(e.email)}) — ${escapeHtml(e.error)}</li>`).join('')}</ul>`;
   }
   if (result.unmatched.length) {
     html += `<div style="color:var(--red)">Could not match ${result.unmatched.length}, check spelling against their account name:</div>`;
@@ -1138,6 +1142,7 @@ async function runBulkImport() {
   try {
     let result = await api('/api/card?bulk=1', { method: 'POST', body: JSON.stringify({ rows }) });
     const created = [];
+    const registerErrors = [];
 
     if (result.unmatched.length) {
       const missingSet = new Set(result.unmatched);
@@ -1146,7 +1151,7 @@ async function runBulkImport() {
       const adminSecret = secretField ? secretField.value : '';
 
       if (toRegister.length && !adminSecret) {
-        resultBox.innerHTML = renderBulkResult(result, []) +
+        resultBox.innerHTML = renderBulkResult(result, [], []) +
           `<div style="color:var(--red);margin-top:10px">${toRegister.length} of those have no account yet. Enter the admin secret in "Add a team member" below, then hit Import again to create accounts for them and retry.</div>`;
         return;
       }
@@ -1157,7 +1162,9 @@ async function runBulkImport() {
         try {
           await api('/api/auth?action=register', { method: 'POST', body: JSON.stringify({ name, email: r.email, password, role: 'team', adminSecret }) });
           created.push({ name, email: r.email, password });
-        } catch(e) { /* leave them in the unmatched list */ }
+        } catch(e) {
+          registerErrors.push({ name, email: r.email, error: e.message });
+        }
       }
 
       if (created.length) {
@@ -1165,7 +1172,7 @@ async function runBulkImport() {
       }
     }
 
-    resultBox.innerHTML = renderBulkResult(result, created);
+    resultBox.innerHTML = renderBulkResult(result, created, registerErrors);
     loadTeamCards();
     loadShareDirectory();
   } catch(e) {
