@@ -205,6 +205,9 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 .tc-who .tc-email { font-size: 11px; color: var(--text-hint); }
 .tc-input { font-family: 'DM Sans', sans-serif; font-size: 13px; padding: 8px 10px; border: 0.5px solid var(--border-mid); border-radius: 8px; outline: none; background: var(--surface); color: var(--text); }
 .tc-input:focus { border-color: var(--green); }
+#card-edit-details summary::-webkit-details-marker { display: none; }
+#card-edit-details summary::marker { content: ""; }
+#card-edit-details[open] #card-edit-chevron { transform: rotate(180deg); }
 
 @media (max-width: 640px) {
   .grid-2 { grid-template-columns: 1fr; gap: 0; }
@@ -369,8 +372,12 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
 
     <div id="view-card" style="display:none">
       <div class="card">
-        <div class="card-title">Your digital business card</div>
-        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Fill this in once, then share your link or QR code at the stand so visitors can save your details straight to their phone.</p>
+        <details id="card-edit-details">
+          <summary class="card-title" style="cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between">
+            <span>Your digital business card</span>
+            <span id="card-edit-chevron" style="font-size:12px;color:var(--text-muted);transition:transform 0.15s">▾</span>
+          </summary>
+        <p style="font-size:13px;color:var(--text-muted);margin:12px 0 16px">Fill this in once, then share your link or QR code at the stand so visitors can save your details straight to their phone.</p>
         <div class="grid-2">
           <div class="field"><label>Job title</label><input type="text" id="card-title" placeholder="e.g. Rail Sales Manager"></div>
           <div class="field"><label>Function</label>
@@ -405,6 +412,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
           </div>
         </div>
         <button class="btn btn-primary" style="margin-top:8px" onclick="saveCard()" id="save-card-btn">Save card</button>
+        </details>
       </div>
 
       <div class="card" id="card-share-card" style="display:none">
@@ -622,6 +630,7 @@ async function loadCard() {
     document.getElementById('card-photo').value = c.photoUrl || '';
     setCardPhotoPreview(c.photoUrl);
     renderCardShare(c.slug, c.qrImageUrl);
+    document.getElementById('card-edit-details').open = !c.title;
   } catch(e) {
     showToast(e.message, false);
   }
@@ -753,6 +762,7 @@ async function saveCard() {
     const c = await api('/api/card', { method: 'PATCH', body: JSON.stringify(body) });
     renderCardShare(c.slug, c.qrImageUrl);
     showToast('Card saved');
+    if (c.title) document.getElementById('card-edit-details').open = false;
   } catch(e) {
     showToast(e.message, false);
   } finally {
