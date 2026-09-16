@@ -4,7 +4,7 @@ function json(data, status = 200) {
     headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
   });
 }
-
+ 
 async function getSession(request, env) {
   const token = (request.headers.get("authorization") || "").replace("Bearer ", "").trim();
   if (!token) return null;
