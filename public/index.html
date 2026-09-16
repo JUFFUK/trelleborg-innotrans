@@ -321,24 +321,35 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
         </div>
         <div class="field">
           <label>Product interest</label>
-          <div class="check-group">
-            <label class="check-label"><input type="checkbox" value="Primary Suspension"> Primary Suspension</label>
-            <label class="check-label"><input type="checkbox" value="Secondary Suspension"> Secondary Suspension</label>
-            <label class="check-label"><input type="checkbox" value="Axle Guide Bearings"> Axle Guide Bearings</label>
-            <label class="check-label"><input type="checkbox" value="Auxiliary Products"> Auxiliary Products</label>
+          <div class="check-group" id="product-checks">
+            <label class="check-label"><input type="checkbox" value="HALL"> HALL</label>
+            <label class="check-label"><input type="checkbox" value="Airspring"> Airspring</label>
+            <label class="check-label"><input type="checkbox" value="Conex3"> Conex3</label>
           </div>
+          <input type="text" id="f-product-other" placeholder="Other product (optional)" style="margin-top:8px">
         </div>
         <div class="grid-2">
           <div class="field"><label>Lead temperature</label>
             <select id="f-temp"><option value="">Select…</option><option value="hot">Hot</option><option value="warm">Warm</option><option value="cold">Cold</option></select>
           </div>
-          <div class="field"><label>Follow-up action</label>
-            <select id="f-followup"><option value="">Select…</option><option value="Send brochure">Send brochure</option><option value="Schedule demo">Schedule demo</option><option value="Send proposal">Send proposal</option><option value="Invite to webinar">Invite to webinar</option><option value="No action needed">No action needed</option></select>
+          <div class="field"><label>Prospect or customer</label>
+            <select id="f-status"><option value="">Select…</option><option value="prospect">Prospect</option><option value="customer">Customer</option></select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Follow-up action</label>
+          <div class="check-group" id="followup-checks">
+            <label class="check-label"><input type="checkbox" value="Send information"> Send information</label>
+            <label class="check-label"><input type="checkbox" value="Arrange personal meeting"> Arrange personal meeting</label>
+            <label class="check-label"><input type="checkbox" value="Arrange Teams call"> Arrange Teams call</label>
+            <label class="check-label"><input type="checkbox" value="Follow-up by email"> Follow-up by email</label>
+            <label class="check-label"><input type="checkbox" value="No action needed"> No action needed</label>
           </div>
         </div>
         <div class="field"><label>Notes</label><textarea id="f-notes" placeholder="Meeting highlights, specific requirements, any context…"></textarea></div>
         <div style="display:flex;gap:10px;align-items:center;margin-top:4px;flex-wrap:wrap">
           <button class="btn btn-primary" onclick="saveLead()" id="save-btn" style="flex:1;min-width:140px;justify-content:center">Save lead</button>
+          <button class="btn btn-success" onclick="saveAndAddAnother()" id="save-another-btn" style="min-width:170px;justify-content:center">Save &amp; add new lead</button>
           <button class="btn" onclick="resetForm()">Clear</button>
           <p class="error-msg" id="form-error"></p>
         </div>
@@ -854,44 +865,64 @@ async function scanCard() {
   }
 }
 
-function getChecked() { return [...document.querySelectorAll('.check-label input:checked')].map(c => c.value); }
+function getChecked(containerId) { return [...document.querySelectorAll('#' + containerId + ' input:checked')].map(c => c.value); }
 
-async function saveLead() {
+async function saveLeadCore(btn) {
   const fname = document.getElementById('f-fname').value.trim();
   const lname = document.getElementById('f-lname').value.trim();
   const email = document.getElementById('f-email').value.trim();
   const company = document.getElementById('f-company').value.trim();
   const err = document.getElementById('form-error');
-  if (!fname || !lname || !email || !company) { err.textContent = 'Please fill in all required fields.'; return; }
-  if (!/\S+@\S+\.\S+/.test(email)) { err.textContent = 'Please enter a valid email address.'; return; }
+  if (!fname || !lname || !email || !company) { err.textContent = 'Please fill in all required fields.'; return false; }
+  if (!/\S+@\S+\.\S+/.test(email)) { err.textContent = 'Please enter a valid email address.'; return false; }
   err.textContent = '';
-  const btn = document.getElementById('save-btn');
+  const original = btn.innerHTML;
   btn.innerHTML = '<span class="spinner-inline"></span> Saving…';
   btn.disabled = true;
+  const products = getChecked('product-checks');
+  const otherProduct = document.getElementById('f-product-other').value.trim();
+  if (otherProduct) products.push(otherProduct);
+  let ok = true;
   try {
     await api('/api/leads', { method: 'POST', body: JSON.stringify({
       fname, lname, email,
       phone: document.getElementById('f-phone').value.trim(),
       company,
       title: document.getElementById('f-title').value.trim(),
-      products: getChecked(),
+      products,
       temp: document.getElementById('f-temp').value,
-      followup: document.getElementById('f-followup').value,
+      status: document.getElementById('f-status').value,
+      followupActions: getChecked('followup-checks'),
       notes: document.getElementById('f-notes').value.trim(),
       scanned: !!currentImageBase64
     })});
     showToast(fname + ' ' + lname + ' saved successfully');
-    resetForm();
     document.getElementById('lead-count-badge').textContent = parseInt(document.getElementById('lead-count-badge').textContent || 0) + 1;
-  } catch(e) { showToast('Failed to save lead — please try again', false); }
-  btn.innerHTML = 'Save lead';
+  } catch(e) { showToast('Failed to save lead — please try again', false); ok = false; }
+  btn.innerHTML = original;
   btn.disabled = false;
+  return ok;
+}
+
+async function saveLead() {
+  const ok = await saveLeadCore(document.getElementById('save-btn'));
+  if (ok) resetForm();
+}
+
+async function saveAndAddAnother() {
+  const ok = await saveLeadCore(document.getElementById('save-another-btn'));
+  if (ok) {
+    ['f-fname','f-lname','f-email','f-phone','f-title'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('autofill-badge').style.display = 'none';
+    resetScan();
+    document.getElementById('f-fname').focus();
+  }
 }
 
 function resetForm() {
-  ['f-fname','f-lname','f-email','f-phone','f-company','f-title','f-notes'].forEach(id => document.getElementById(id).value = '');
+  ['f-fname','f-lname','f-email','f-phone','f-company','f-title','f-notes','f-product-other'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('f-temp').value = '';
-  document.getElementById('f-followup').value = '';
+  document.getElementById('f-status').value = '';
   document.querySelectorAll('.check-label input:checked').forEach(c => c.checked = false);
   document.getElementById('form-error').textContent = '';
   document.getElementById('autofill-badge').style.display = 'none';
@@ -923,14 +954,16 @@ function renderLeads() {
     const initials = ((l.fname||'')[0]||'') + ((l.lname||'')[0]||'');
     const tagClass = l.temp === 'hot' ? 'tag-hot' : l.temp === 'warm' ? 'tag-warm' : 'tag-cold';
     const tempTag = l.temp ? `<span class="tag ${tagClass}">${l.temp}</span>` : '';
+    const statusTag = l.status ? `<span class="tag ${l.status === 'customer' ? 'tag-synced' : 'tag-warm'}">${l.status}</span>` : '';
     const syncTag = l.synced ? '<span class="tag tag-synced">✓ HubSpot</span>' : '<span class="tag tag-pending">Pending</span>';
     const scanTag = l.scanned ? '<span class="tag tag-scan">Card scan</span>' : '';
     const products = l.products?.length ? `<p style="font-size:12px;color:var(--text-muted);margin-top:4px">${l.products.join(' · ')}</p>` : '';
-    const followup = l.followup ? `<p style="font-size:12px;color:var(--text-muted);margin-top:2px">→ ${l.followup}</p>` : '';
+    const followupList = l.followupActions?.length ? l.followupActions : (l.followup ? [l.followup] : []);
+    const followup = followupList.length ? `<p style="font-size:12px;color:var(--text-muted);margin-top:2px">→ ${followupList.join(' · ')}</p>` : '';
     const notes = l.notes ? `<p style="font-size:12px;color:var(--text-hint);margin-top:4px;font-style:italic">${l.notes.slice(0,110)}${l.notes.length>110?'…':''}</p>` : '';
     const capturedBy = currentUser.role === 'manager' ? `<p style="font-size:11px;color:var(--text-hint);margin-top:3px">Captured by ${l.capturedByName||l.capturedBy}</p>` : '';
     const syncBtn = l.synced ? '' : `<button class="btn btn-sm" onclick="syncOne('${l.id}')">Sync</button>`;
-    return `<div class="lead-card"><div style="display:flex;align-items:flex-start;gap:12px"><div class="lead-avatar">${initials.toUpperCase()}</div><div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="font-size:15px;font-weight:600">${l.fname} ${l.lname}</span>${tempTag}${syncTag}${scanTag}</div><p style="font-size:13px;color:var(--text-muted)">${[l.title,l.company].filter(Boolean).join(' · ')}</p><p style="font-size:13px;color:var(--text-muted)">${l.email}${l.phone?' · '+l.phone:''}</p>${capturedBy}${products}${followup}${notes}</div><div style="display:flex;gap:6px;flex-shrink:0">${syncBtn}<button class="btn btn-sm btn-danger" onclick="deleteLead('${l.id}')">✕</button></div></div></div>`;
+    return `<div class="lead-card"><div style="display:flex;align-items:flex-start;gap:12px"><div class="lead-avatar">${initials.toUpperCase()}</div><div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="font-size:15px;font-weight:600">${l.fname} ${l.lname}</span>${tempTag}${statusTag}${syncTag}${scanTag}</div><p style="font-size:13px;color:var(--text-muted)">${[l.title,l.company].filter(Boolean).join(' · ')}</p><p style="font-size:13px;color:var(--text-muted)">${l.email}${l.phone?' · '+l.phone:''}</p>${capturedBy}${products}${followup}${notes}</div><div style="display:flex;gap:6px;flex-shrink:0">${syncBtn}<button class="btn btn-sm btn-danger" onclick="deleteLead('${l.id}')">✕</button></div></div></div>`;
   }).join('');
 }
 
@@ -972,8 +1005,11 @@ async function deleteLead(id) {
 
 function exportCSV() {
   if (!allLeads.length) { showToast('No leads to export', false); return; }
-  const hdr = ['First name','Last name','Email','Phone','Company','Job title','Products','Temperature','Follow-up','Notes','Captured by','Card scanned','Synced','Date'];
-  const rows = allLeads.map(l => [l.fname,l.lname,l.email,l.phone,l.company,l.title,(l.products||[]).join('; '),l.temp,l.followup,l.notes,l.capturedByName||l.capturedBy,l.scanned?'Yes':'No',l.synced?'Yes':'No',(l.createdAt||'').slice(0,10)].map(v => '"'+String(v||'').replace(/"/g,'""')+'"').join(','));
+  const hdr = ['First name','Last name','Email','Phone','Company','Job title','Products','Temperature','Prospect/Customer','Follow-up','Notes','Captured by','Card scanned','Synced','Date'];
+  const rows = allLeads.map(l => {
+    const followupList = l.followupActions?.length ? l.followupActions : (l.followup ? [l.followup] : []);
+    return [l.fname,l.lname,l.email,l.phone,l.company,l.title,(l.products||[]).join('; '),l.temp,l.status,followupList.join('; '),l.notes,l.capturedByName||l.capturedBy,l.scanned?'Yes':'No',l.synced?'Yes':'No',(l.createdAt||'').slice(0,10)].map(v => '"'+String(v||'').replace(/"/g,'""')+'"').join(',');
+  });
   const csv = [hdr.join(','),...rows].join('\n');
   const a = document.createElement('a');
   a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
