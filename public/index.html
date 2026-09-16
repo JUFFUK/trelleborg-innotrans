@@ -850,7 +850,7 @@ async function scanCard() {
   } catch(e) {
     document.getElementById('scan-status').style.display = 'none';
     document.getElementById('scan-btn').style.display = 'flex';
-    showToast('Extraction failed — please fill in manually', false);
+    showToast('Extraction failed: ' + e.message, false);
   }
 }
 
