@@ -389,15 +389,20 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
               <option value="Management">Management</option>
               <option value="Support">Support</option>
               <option value="Purchasing">Purchasing</option>
+              <option value="Internal sales">Internal sales</option>
+              <option value="GM">GM</option>
+              <option value="I &amp; D">I &amp; D</option>
+              <option value="Barista">Barista</option>
             </select>
           </div>
           <div class="field"><label>Business unit</label>
             <select id="card-business-unit">
               <option value="">Select a business unit</option>
               <option value="AVS">AVS</option>
-              <option value="FHS">FHS</option>
-              <option value="S&amp;P">S&amp;P</option>
               <option value="ECF">ECF</option>
+              <option value="TIS">TIS</option>
+              <option value="PE">PE</option>
+              <option value="RMC">RMC</option>
             </select>
           </div>
           <div class="field"><label>Phone</label><input type="tel" id="card-phone" placeholder="+44 7…"></div>
@@ -442,13 +447,18 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
           <button type="button" class="btn btn-sm tc-filter-btn" data-function="Management" onclick="setFunctionFilter('Management')">Management</button>
           <button type="button" class="btn btn-sm tc-filter-btn" data-function="Support" onclick="setFunctionFilter('Support')">Support</button>
           <button type="button" class="btn btn-sm tc-filter-btn" data-function="Purchasing" onclick="setFunctionFilter('Purchasing')">Purchasing</button>
+          <button type="button" class="btn btn-sm tc-filter-btn" data-function="Internal sales" onclick="setFunctionFilter('Internal sales')">Internal sales</button>
+          <button type="button" class="btn btn-sm tc-filter-btn" data-function="GM" onclick="setFunctionFilter('GM')">GM</button>
+          <button type="button" class="btn btn-sm tc-filter-btn" data-function="I &amp; D" onclick="setFunctionFilter('I &amp; D')">I &amp; D</button>
+          <button type="button" class="btn btn-sm tc-filter-btn" data-function="Barista" onclick="setFunctionFilter('Barista')">Barista</button>
         </div>
         <div id="tc-filter-bu-buttons" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
           <button type="button" class="btn btn-sm btn-success tc-filter-bu-btn" data-bu="" onclick="setBuFilter('')">All business units</button>
           <button type="button" class="btn btn-sm tc-filter-bu-btn" data-bu="AVS" onclick="setBuFilter('AVS')">AVS</button>
-          <button type="button" class="btn btn-sm tc-filter-bu-btn" data-bu="FHS" onclick="setBuFilter('FHS')">FHS</button>
-          <button type="button" class="btn btn-sm tc-filter-bu-btn" data-bu="S&amp;P" onclick="setBuFilter('S&amp;P')">S&amp;P</button>
           <button type="button" class="btn btn-sm tc-filter-bu-btn" data-bu="ECF" onclick="setBuFilter('ECF')">ECF</button>
+          <button type="button" class="btn btn-sm tc-filter-bu-btn" data-bu="TIS" onclick="setBuFilter('TIS')">TIS</button>
+          <button type="button" class="btn btn-sm tc-filter-bu-btn" data-bu="PE" onclick="setBuFilter('PE')">PE</button>
+          <button type="button" class="btn btn-sm tc-filter-bu-btn" data-bu="RMC" onclick="setBuFilter('RMC')">RMC</button>
         </div>
         <input type="text" id="tc-filter-search" class="tc-input" placeholder="Or search by name" style="width:100%;margin-bottom:12px" oninput="renderShareDirectory()">
         <div id="share-team-list" style="font-size:13px;color:var(--text-muted)">Loading…</div>
@@ -478,6 +488,13 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
         <div class="card-title">Team cards</div>
         <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Fill in job titles, phone numbers and LinkedIn links on everyone's behalf ahead of the show. People can still edit their own under "My card".</p>
         <div id="team-cards-list" style="font-size:13px;color:var(--text-muted)">Loading…</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Bulk import function &amp; business unit</div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Paste a list with columns Name, Surname, Department, Company (tab-separated, one person per line, a header row is fine). Matches against existing accounts by name; anyone not found is listed so you can check spelling.</p>
+        <textarea id="bulk-import-text" placeholder="Alice&#9;Stancanelli&#9;Marketing&#9;AVS" style="width:100%;min-height:120px;font-family:'DM Sans',sans-serif;font-size:13px;padding:10px 12px;border:0.5px solid var(--border-mid);border-radius:var(--radius);outline:none;background:var(--surface);color:var(--text);resize:vertical;margin-bottom:10px"></textarea>
+        <button class="btn btn-primary" id="bulk-import-btn" onclick="runBulkImport()">Import</button>
+        <div id="bulk-import-result" style="font-size:13px;color:var(--text-muted);margin-top:14px"></div>
       </div>
     </div>
   </main>
@@ -1013,12 +1030,12 @@ function escapeHtml(str) {
 }
 
 function functionOptionsHtml(selected) {
-  const opts = ['', 'Sales', 'Engineering', 'Marketing', 'Management', 'Support', 'Purchasing'];
-  return opts.map(f => `<option value="${f}"${selected === f ? ' selected' : ''}>${f || 'No function'}</option>`).join('');
+  const opts = ['', 'Sales', 'Engineering', 'Marketing', 'Management', 'Support', 'Purchasing', 'Internal sales', 'GM', 'I & D', 'Barista'];
+  return opts.map(f => `<option value="${escapeHtml(f)}"${selected === f ? ' selected' : ''}>${escapeHtml(f) || 'No function'}</option>`).join('');
 }
 
 function buOptionsHtml(selected) {
-  const opts = ['', 'AVS', 'FHS', 'S&P', 'ECF'];
+  const opts = ['', 'AVS', 'ECF', 'TIS', 'PE', 'RMC'];
   return opts.map(b => `<option value="${b}"${selected === b ? ' selected' : ''}>${b || 'No business unit'}</option>`).join('');
 }
 
@@ -1061,6 +1078,50 @@ async function saveTeamCard(email, btn) {
     loadTeamCards();
   } catch(e) {
     showToast(e.message, false);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = original;
+  }
+}
+
+function parseBulkImportText(text) {
+  const rows = [];
+  text.split('\n').forEach(line => {
+    if (!line.trim()) return;
+    let cells = line.split('\t');
+    if (cells.length < 4) cells = line.split(/\s{2,}/);
+    if (cells.length < 4) return;
+    const [firstName, lastName, department, company] = cells.map(c => c.trim());
+    if (!firstName || firstName.toLowerCase() === 'name') return; // skip header row
+    rows.push({ firstName, lastName, department, company });
+  });
+  return rows;
+}
+
+async function runBulkImport() {
+  const btn = document.getElementById('bulk-import-btn');
+  const resultBox = document.getElementById('bulk-import-result');
+  const rows = parseBulkImportText(document.getElementById('bulk-import-text').value);
+  if (!rows.length) {
+    resultBox.textContent = 'Nothing to import, paste in some rows first.';
+    return;
+  }
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Importing…';
+  resultBox.textContent = '';
+  try {
+    const result = await api('/api/card?bulk=1', { method: 'POST', body: JSON.stringify({ rows }) });
+    let html = `<div style="color:var(--green-text);font-weight:500;margin-bottom:6px">Matched and updated ${result.matched.length} of ${rows.length}</div>`;
+    if (result.unmatched.length) {
+      html += `<div style="color:var(--red)">Could not match ${result.unmatched.length}, check spelling against their account name:</div>`;
+      html += `<ul style="margin:6px 0 0 18px">${result.unmatched.map(n => `<li>${escapeHtml(n)}</li>`).join('')}</ul>`;
+    }
+    resultBox.innerHTML = html;
+    loadTeamCards();
+    loadShareDirectory();
+  } catch(e) {
+    resultBox.textContent = e.message;
   } finally {
     btn.disabled = false;
     btn.textContent = original;
