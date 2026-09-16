@@ -490,9 +490,9 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
         <div id="team-cards-list" style="font-size:13px;color:var(--text-muted)">Loading…</div>
       </div>
       <div class="card">
-        <div class="card-title">Bulk import function &amp; business unit</div>
-        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Paste a list with columns Name, Surname, Department, Company (tab-separated, one person per line, a header row is fine). Matches against existing accounts by name; anyone not found is listed so you can check spelling.</p>
-        <textarea id="bulk-import-text" placeholder="Alice&#9;Stancanelli&#9;Marketing&#9;AVS" style="width:100%;min-height:120px;font-family:'DM Sans',sans-serif;font-size:13px;padding:10px 12px;border:0.5px solid var(--border-mid);border-radius:var(--radius);outline:none;background:var(--surface);color:var(--text);resize:vertical;margin-bottom:10px"></textarea>
+        <div class="card-title">Bulk import team details</div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Paste a list with columns Name, Surname, Department, Company, and optionally Job Title, Email (tab-separated, one person per line, a header row is fine). Matches by email when given, otherwise by name; anyone not found is listed so you can check spelling.</p>
+        <textarea id="bulk-import-text" placeholder="Alice&#9;Stancanelli&#9;Marketing&#9;AVS&#9;Digital Marketing Manager&#9;alice.stancanelli@trelleborg.com" style="width:100%;min-height:120px;font-family:'DM Sans',sans-serif;font-size:13px;padding:10px 12px;border:0.5px solid var(--border-mid);border-radius:var(--radius);outline:none;background:var(--surface);color:var(--text);resize:vertical;margin-bottom:10px"></textarea>
         <button class="btn btn-primary" id="bulk-import-btn" onclick="runBulkImport()">Import</button>
         <div id="bulk-import-result" style="font-size:13px;color:var(--text-muted);margin-top:14px"></div>
       </div>
@@ -1091,9 +1091,10 @@ function parseBulkImportText(text) {
     let cells = line.split('\t');
     if (cells.length < 4) cells = line.split(/\s{2,}/);
     if (cells.length < 4) return;
-    const [firstName, lastName, department, company] = cells.map(c => c.trim());
+    while (cells.length < 6) cells.push('');
+    const [firstName, lastName, department, company, jobTitle, email] = cells.map(c => c.trim());
     if (!firstName || firstName.toLowerCase() === 'name') return; // skip header row
-    rows.push({ firstName, lastName, department, company });
+    rows.push({ firstName, lastName, department, company, jobTitle, email });
   });
   return rows;
 }
