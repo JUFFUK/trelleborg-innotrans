@@ -22,7 +22,9 @@ function tempToLeadStatus(temp) {
 async function syncToHubSpot(lead, token) {
   const descParts = [];
   if (lead.products && lead.products.length) descParts.push("Product interest: " + lead.products.join(", "));
-  if (lead.followup) descParts.push("Follow-up: " + lead.followup);
+  const followupList = lead.followupActions && lead.followupActions.length ? lead.followupActions : (lead.followup ? [lead.followup] : []);
+  if (followupList.length) descParts.push("Follow-up: " + followupList.join(", "));
+  if (lead.status) descParts.push("Status: " + lead.status);
   if (lead.notes) descParts.push("Notes: " + lead.notes);
   descParts.push("Captured by: " + (lead.capturedByName || lead.capturedBy || "Unknown"));
   descParts.push("Source: Innotrans 2026, Berlin");
