@@ -390,8 +390,6 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
               <option value="Support">Support</option>
               <option value="Purchasing">Purchasing</option>
               <option value="Internal sales">Internal sales</option>
-              <option value="GM">GM</option>
-              <option value="I &amp; D">I &amp; D</option>
             </select>
           </div>
           <div class="field"><label>Business unit</label>
@@ -447,8 +445,6 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
           <button type="button" class="btn btn-sm tc-filter-btn" data-function="Support" onclick="setFunctionFilter('Support')">Support</button>
           <button type="button" class="btn btn-sm tc-filter-btn" data-function="Purchasing" onclick="setFunctionFilter('Purchasing')">Purchasing</button>
           <button type="button" class="btn btn-sm tc-filter-btn" data-function="Internal sales" onclick="setFunctionFilter('Internal sales')">Internal sales</button>
-          <button type="button" class="btn btn-sm tc-filter-btn" data-function="GM" onclick="setFunctionFilter('GM')">GM</button>
-          <button type="button" class="btn btn-sm tc-filter-btn" data-function="I &amp; D" onclick="setFunctionFilter('I &amp; D')">I &amp; D</button>
         </div>
         <div id="tc-filter-bu-buttons" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
           <button type="button" class="btn btn-sm btn-success tc-filter-bu-btn" data-bu="" onclick="setBuFilter('')">All business units</button>
@@ -1028,7 +1024,7 @@ function escapeHtml(str) {
 }
 
 function functionOptionsHtml(selected) {
-  const opts = ['', 'Sales', 'Engineering', 'Marketing', 'Management', 'Support', 'Purchasing', 'Internal sales', 'GM', 'I & D'];
+  const opts = ['', 'Sales', 'Engineering', 'Marketing', 'Management', 'Support', 'Purchasing', 'Internal sales'];
   return opts.map(f => `<option value="${escapeHtml(f)}"${selected === f ? ' selected' : ''}>${escapeHtml(f) || 'No function'}</option>`).join('');
 }
 
