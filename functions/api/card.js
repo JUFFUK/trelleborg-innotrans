@@ -5,6 +5,10 @@ function json(data, status = 200) {
   });
 }
 
+function normalizeName(s) {
+  return (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 async function generateQrIo(dataUrl, title, env) {
   if (!env.QRIO_API_KEY) return null;
   try {
@@ -83,13 +87,14 @@ function publicFields(card) {
 
 export async function onRequest({ request, env }) {
   if (request.method === "OPTIONS") {
-    return new Response(null, { headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET,PATCH", "Access-Control-Allow-Headers": "Content-Type,Authorization" } });
+    return new Response(null, { headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET,PATCH,POST", "Access-Control-Allow-Headers": "Content-Type,Authorization" } });
   }
 
   const url = new URL(request.url);
   const slug = url.searchParams.get("slug");
   const emailParam = url.searchParams.get("email");
   const wantsAll = url.searchParams.get("all") === "1";
+  const wantsBulk = url.searchParams.get("bulk") === "1";
 
   // ── PUBLIC LOOKUP (no auth, used by card.html) ──
   if (request.method === "GET" && slug) {
@@ -103,6 +108,66 @@ export async function onRequest({ request, env }) {
   // Everything below requires a signed-in session
   const session = await getSession(request, env);
   if (!session) return json({ error: "Unauthorised" }, 401);
+
+  // ── MANAGER: bulk-import function/business unit by matching names against existing accounts ──
+  if (request.method === "POST" && wantsBulk) {
+    if (session.role !== "manager") return json({ error: "Forbidden" }, 403);
+    const body = await request.json();
+    const rows = Array.isArray(body.rows) ? body.rows : [];
+
+    const list = await env.USERS.list({ prefix: "user:" });
+    const allUsers = (await Promise.all(list.keys.map(k => env.USERS.get(k.name, { type: "json" })))).filter(Boolean);
+
+    const matched = [];
+    const unmatched = [];
+
+    for (const row of rows) {
+      const fullName = `${row.firstName || ""} ${row.lastName || ""}`.trim();
+      if (!fullName) continue;
+      const target = normalizeName(fullName);
+      const user = allUsers.find(u => normalizeName(u.name) === target);
+      if (!user) {
+        unmatched.push(fullName);
+        continue;
+      }
+
+      let functionValue = (row.department || "").trim();
+      const businessUnitValue = (row.company || "").trim();
+      // A department value identical to the company looks like a data gap
+      // (e.g. "ECF" listed as both), not a real function, so leave it blank.
+      if (functionValue && businessUnitValue && functionValue.toLowerCase() === businessUnitValue.toLowerCase()) {
+        functionValue = "";
+      }
+
+      const existing = await env.USERS.get("card:" + user.email, { type: "json" });
+      const card = {
+        ...(existing || {
+          email: user.email,
+          name: user.name,
+          company: "Trelleborg Antivibration Solutions",
+          createdAt: new Date().toISOString()
+        }),
+        email: user.email,
+        name: user.name,
+        function: functionValue,
+        businessUnit: businessUnitValue,
+        updatedAt: new Date().toISOString()
+      };
+      if (!card.slug) {
+        card.slug = await uniqueSlug(slugify(user.name), env, user.email);
+        await env.USERS.put("cardslug:" + card.slug, user.email);
+      }
+      if (!card.qrImageUrl) {
+        const publicUrl = url.origin + "/card.html?id=" + card.slug;
+        const qrImageUrl = await generateQrIo(publicUrl, user.name + " — Trelleborg", env);
+        if (qrImageUrl) card.qrImageUrl = qrImageUrl;
+      }
+      await env.USERS.put("card:" + user.email, JSON.stringify(card));
+      matched.push({ name: user.name, email: user.email, function: functionValue, businessUnit: businessUnitValue });
+    }
+
+    return json({ matched, unmatched });
+  }
 
   // ── LIST EVERY TEAM MEMBER'S CARD (any signed-in team member, to share colleagues' cards) ──
   if (request.method === "GET" && wantsAll) {
