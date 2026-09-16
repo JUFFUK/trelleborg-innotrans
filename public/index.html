@@ -491,7 +491,7 @@ body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--t
       </div>
       <div class="card">
         <div class="card-title">Bulk import team details</div>
-        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Paste a list with columns Name, Surname, Department, Company, and optionally Job Title, Email (tab-separated, one person per line, a header row is fine). Matches by email when given, otherwise by name; anyone not found is listed so you can check spelling.</p>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Paste a list with columns Name, Surname, Department, Company, and optionally Job Title, Email (tab-separated, one person per line, a header row is fine). Matches by email when given, otherwise by name. Anyone with no existing account gets one created automatically, using the admin secret entered below in "Add a team member".</p>
         <textarea id="bulk-import-text" placeholder="Alice&#9;Stancanelli&#9;Marketing&#9;AVS&#9;Digital Marketing Manager&#9;alice.stancanelli@trelleborg.com" style="width:100%;min-height:120px;font-family:'DM Sans',sans-serif;font-size:13px;padding:10px 12px;border:0.5px solid var(--border-mid);border-radius:var(--radius);outline:none;background:var(--surface);color:var(--text);resize:vertical;margin-bottom:10px"></textarea>
         <button class="btn btn-primary" id="bulk-import-btn" onclick="runBulkImport()">Import</button>
         <div id="bulk-import-result" style="font-size:13px;color:var(--text-muted);margin-top:14px"></div>
@@ -1099,6 +1099,26 @@ function parseBulkImportText(text) {
   return rows;
 }
 
+function generateTempPassword() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+  let pw = '';
+  for (let i = 0; i < 10; i++) pw += chars[Math.floor(Math.random() * chars.length)];
+  return pw;
+}
+
+function renderBulkResult(result, created) {
+  let html = `<div style="color:var(--green-text);font-weight:500;margin-bottom:6px">Matched and updated ${result.matched.length}</div>`;
+  if (created && created.length) {
+    html += `<div style="font-weight:500;margin-bottom:6px">Created ${created.length} new account${created.length === 1 ? '' : 's'}, share these temporary passwords so they can log in and change them:</div>`;
+    html += `<ul style="margin:0 0 12px 18px">${created.map(c => `<li>${escapeHtml(c.name)} — ${escapeHtml(c.email)} — <code>${escapeHtml(c.password)}</code></li>`).join('')}</ul>`;
+  }
+  if (result.unmatched.length) {
+    html += `<div style="color:var(--red)">Could not match ${result.unmatched.length}, check spelling against their account name:</div>`;
+    html += `<ul style="margin:6px 0 0 18px">${result.unmatched.map(n => `<li>${escapeHtml(n)}</li>`).join('')}</ul>`;
+  }
+  return html;
+}
+
 async function runBulkImport() {
   const btn = document.getElementById('bulk-import-btn');
   const resultBox = document.getElementById('bulk-import-result');
@@ -1112,13 +1132,36 @@ async function runBulkImport() {
   btn.textContent = 'Importing…';
   resultBox.textContent = '';
   try {
-    const result = await api('/api/card?bulk=1', { method: 'POST', body: JSON.stringify({ rows }) });
-    let html = `<div style="color:var(--green-text);font-weight:500;margin-bottom:6px">Matched and updated ${result.matched.length} of ${rows.length}</div>`;
+    let result = await api('/api/card?bulk=1', { method: 'POST', body: JSON.stringify({ rows }) });
+    const created = [];
+
     if (result.unmatched.length) {
-      html += `<div style="color:var(--red)">Could not match ${result.unmatched.length}, check spelling against their account name:</div>`;
-      html += `<ul style="margin:6px 0 0 18px">${result.unmatched.map(n => `<li>${escapeHtml(n)}</li>`).join('')}</ul>`;
+      const missingSet = new Set(result.unmatched);
+      const toRegister = rows.filter(r => missingSet.has(`${r.firstName} ${r.lastName}`.trim()) && r.email);
+      const secretField = document.getElementById('a-secret');
+      const adminSecret = secretField ? secretField.value : '';
+
+      if (toRegister.length && !adminSecret) {
+        resultBox.innerHTML = renderBulkResult(result, []) +
+          `<div style="color:var(--red);margin-top:10px">${toRegister.length} of those have no account yet. Enter the admin secret in "Add a team member" below, then hit Import again to create accounts for them and retry.</div>`;
+        return;
+      }
+
+      for (const r of toRegister) {
+        const name = `${r.firstName} ${r.lastName}`.trim();
+        const password = generateTempPassword();
+        try {
+          await api('/api/auth?action=register', { method: 'POST', body: JSON.stringify({ name, email: r.email, password, role: 'team', adminSecret }) });
+          created.push({ name, email: r.email, password });
+        } catch(e) { /* leave them in the unmatched list */ }
+      }
+
+      if (created.length) {
+        result = await api('/api/card?bulk=1', { method: 'POST', body: JSON.stringify({ rows }) });
+      }
     }
-    resultBox.innerHTML = html;
+
+    resultBox.innerHTML = renderBulkResult(result, created);
     loadTeamCards();
     loadShareDirectory();
   } catch(e) {
