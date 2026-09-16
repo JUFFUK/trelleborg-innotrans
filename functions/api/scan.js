@@ -1,59 +1,1224 @@
-function json(data, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
-  });
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trelleborg — Innotrans 2026</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --radius: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --green: #0F6E56;
+  --green-light: #E1F5EE;
+  --green-text: #085041;
+  --red: #A32D2D;
+  --red-light: #FCEBEB;
+  --purple-light: #EEEDFE;
+  --purple-text: #3C3489;
 }
 
-async function getSession(request, env) {
-  const token = (request.headers.get("authorization") || "").replace("Bearer ", "").trim();
-  if (!token) return null;
-  const session = await env.USERS.get("session:" + token, { type: "json" });
-  if (!session || Date.now() > session.expiry) return null;
-  return session;
+:root[data-theme='light'] {
+  --bg: #F7F6F2;
+  --surface: #FFFFFF;
+  --surface2: #F0EEE8;
+  --border: rgba(0,0,0,0.08);
+  --border-mid: rgba(0,0,0,0.15);
+  --text: #1A1916;
+  --text-muted: #6B6860;
+  --text-hint: #A09D97;
+  --accent: #C9A227;
+  --accent-light: #FDF3D6;
+  --accent-text: #5C4500;
+  --topbar-bg: #FFFFFF;
+  --topbar-border: rgba(0,0,0,0.1);
+  --topbar-text: #1A1916;
+  --topbar-tab-bg: rgba(0,0,0,0.05);
+  --topbar-tab-color: rgba(0,0,0,0.45);
+  --topbar-tab-active: rgba(0,0,0,0.08);
+  --topbar-pill-bg: rgba(0,0,0,0.05);
+  --topbar-logo: '/logo-light.svg';
 }
 
-export async function onRequest({ request, env }) {
-  if (request.method === "OPTIONS") {
-    return new Response(null, { headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST", "Access-Control-Allow-Headers": "Content-Type,Authorization" } });
-  }
+:root[data-theme='dark'] {
+  --bg: #111111;
+  --surface: #1A1A1A;
+  --surface2: #222222;
+  --border: rgba(255,255,255,0.08);
+  --border-mid: rgba(255,255,255,0.15);
+  --text: #F0EEE8;
+  --text-muted: #A09D97;
+  --text-hint: #6B6860;
+  --accent: #E8A300;
+  --accent-light: #3A2E00;
+  --accent-text: #FFD166;
+  --topbar-bg: #000000;
+  --topbar-border: rgba(255,255,255,0.08);
+  --topbar-text: #ffffff;
+  --topbar-tab-bg: rgba(255,255,255,0.08);
+  --topbar-tab-color: rgba(255,255,255,0.5);
+  --topbar-tab-active: rgba(255,255,255,0.12);
+  --topbar-pill-bg: rgba(255,255,255,0.08);
+}
 
-  const session = await getSession(request, env);
-  if (!session) return json({ error: "Unauthorised" }, 401);
+body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 14px; line-height: 1.6; }
 
-  if (!env.ANTHROPIC_API_KEY) return json({ error: "API key not configured" }, 500);
+/* LOGIN */
+#login-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 2rem; }
+:root[data-theme='dark'] #login-screen { background: #000; }
+:root[data-theme='light'] #login-screen { background: #F7F6F2; }
 
-  const { imageBase64, imageType } = await request.json();
-  if (!imageBase64 || !imageType) return json({ error: "Image data required" }, 400);
+#setup-screen { min-height: 100vh; display: none; align-items: center; justify-content: center; padding: 2rem; }
+:root[data-theme='dark'] #setup-screen { background: #000; }
+:root[data-theme='light'] #setup-screen { background: #F7F6F2; }
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": env.ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01"
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-5",
-      max_tokens: 1000,
-      messages: [{
-        role: "user",
-        content: [
-          { type: "image", source: { type: "base64", media_type: imageType, data: imageBase64 } },
-          { type: "text", text: "This is a business card. Extract contact details and return ONLY a JSON object with keys: firstName, lastName, email, phone, company, jobTitle. Use empty string for missing fields. No preamble, no markdown, raw JSON only." }
-        ]
-      }]
-    })
+.login-card {
+  border-radius: var(--radius-xl);
+  padding: 2.5rem 2rem;
+  width: 100%;
+  max-width: 380px;
+}
+:root[data-theme='dark'] .login-card { background: #000; border: 0.5px solid rgba(255,255,255,0.1); }
+:root[data-theme='light'] .login-card { background: #fff; border: 0.5px solid rgba(0,0,0,0.12); }
+
+.login-logo { display: flex; justify-content: center; margin-bottom: 2rem; }
+.login-logo img { height: 80px; object-fit: contain; }
+
+.login-title { font-size: 20px; font-weight: 600; margin-bottom: 0.25rem; }
+:root[data-theme='dark'] .login-title { color: #fff; }
+.login-sub { font-size: 13px; margin-bottom: 1.75rem; }
+:root[data-theme='dark'] .login-sub { color: rgba(255,255,255,0.45); }
+:root[data-theme='light'] .login-sub { color: #6B6860; }
+
+/* FIELDS */
+.field { margin-bottom: 16px; }
+.field label { font-size: 12px; font-weight: 600; display: block; margin-bottom: 7px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+.field input, .field select, .field textarea {
+  width: 100%; padding: 14px 16px;
+  border-radius: var(--radius); font-family: 'DM Sans', sans-serif;
+  font-size: 16px; color: var(--text); background: var(--surface);
+  border: 0.5px solid var(--border-mid); outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.field input:focus, .field select:focus, .field textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(232,163,0,0.15);
+}
+.field textarea { resize: vertical; min-height: 140px; }
+.field input.auto-filled { border-color: var(--green); background: var(--green-light); }
+
+:root[data-theme='dark'] .login-card .field label { color: rgba(255,255,255,0.45); }
+:root[data-theme='dark'] .login-card .field input,
+:root[data-theme='dark'] .login-card .field select {
+  background: rgba(255,255,255,0.07);
+  border-color: rgba(255,255,255,0.15);
+  color: #fff;
+}
+:root[data-theme='dark'] .login-card .field input::placeholder { color: rgba(255,255,255,0.25); }
+
+/* BUTTONS */
+.btn {
+  font-family: 'DM Sans', sans-serif; font-size: 15px; font-weight: 500;
+  padding: 13px 20px; border-radius: var(--radius); cursor: pointer;
+  border: 0.5px solid var(--border-mid); background: transparent;
+  color: var(--text); transition: background 0.15s, transform 0.1s;
+  display: inline-flex; align-items: center; gap: 7px;
+}
+.btn:hover { background: var(--surface2); }
+.btn:active { transform: scale(0.98); }
+.btn-primary { background: var(--accent); color: #1A1916; border-color: var(--accent); font-weight: 600; }
+.btn-primary:hover { filter: brightness(0.9); }
+.btn-full { width: 100%; justify-content: center; }
+.btn-success { background: var(--green); color: #fff; border-color: var(--green); }
+.btn-success:hover { background: var(--green-text); }
+.btn-sm { font-size: 12px; padding: 6px 12px; }
+.btn-danger { color: var(--red); border-color: rgba(163,45,45,0.3); }
+.btn-danger:hover { background: var(--red-light); }
+.error-msg { font-size: 12px; color: var(--red); margin-top: 8px; }
+.spinner-inline { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(0,0,0,0.2); border-top-color: #1A1916; border-radius: 50%; animation: spin 0.7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* TOPBAR */
+.topbar {
+  background: var(--topbar-bg);
+  border-bottom: 0.5px solid var(--topbar-border);
+  padding: 0 1.5rem; height: 64px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 10;
+}
+.topbar-logo img { height: 44px; object-fit: contain; }
+.nav-tabs { display: flex; gap: 4px; background: var(--topbar-tab-bg); padding: 4px; border-radius: var(--radius-lg); border: 0.5px solid var(--topbar-border); }
+.nav-tab { font-family: 'DM Sans', sans-serif; font-size: 13px; padding: 7px 16px; border-radius: 8px; border: none; background: transparent; color: var(--topbar-tab-color); cursor: pointer; font-weight: 500; display: flex; align-items: center; gap: 6px; transition: all 0.15s; }
+.nav-tab:hover { color: var(--topbar-text); }
+.nav-tab.active { background: var(--topbar-tab-active); color: var(--topbar-text); border: 0.5px solid var(--topbar-border); }
+.count-badge { background: #E8A300; color: #000; border-radius: 999px; padding: 1px 6px; font-size: 10px; font-weight: 600; }
+.user-pill { display: flex; align-items: center; gap: 8px; padding: 5px 12px 5px 5px; background: var(--topbar-pill-bg); border-radius: 999px; border: 0.5px solid var(--topbar-border); }
+.user-avatar { width: 26px; height: 26px; border-radius: 50%; background: #E8A300; color: #000; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+.user-name { font-size: 13px; font-weight: 500; color: var(--topbar-text); }
+.role-badge { font-size: 10px; padding: 2px 7px; border-radius: 999px; font-weight: 500; color: var(--topbar-text); background: var(--topbar-tab-bg); }
+.topbar-btn { font-family: 'DM Sans', sans-serif; font-size: 14px; cursor: pointer; border-radius: var(--radius); padding: 7px 12px; background: transparent; color: var(--topbar-text); border: 0.5px solid var(--topbar-border); transition: background 0.15s; }
+.topbar-btn:hover { background: var(--topbar-tab-bg); }
+
+/* APP CONTENT */
+#app { display: none; min-height: 100vh; }
+.main { max-width: 860px; margin: 0 auto; padding: 1.75rem 1.5rem; }
+.card { background: var(--surface); border: 0.5px solid var(--border-mid); border-radius: var(--radius-lg); padding: 1.25rem 1.5rem; margin-bottom: 1rem; }
+.card-title { font-size: 14px; font-weight: 600; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 1.25rem; }
+.metric { background: var(--surface2); border-radius: var(--radius); padding: 1rem; text-align: center; }
+.metric-val { font-size: 28px; font-weight: 600; line-height: 1; }
+.metric-lbl { font-size: 11px; color: var(--text-muted); margin-top: 5px; text-transform: uppercase; letter-spacing: 0.04em; }
+.tag { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 3px 9px; border-radius: 999px; font-weight: 500; }
+.tag-hot { background: #FAECE7; color: #712B13; }
+.tag-warm { background: #FDF3E0; color: #8A5A0A; }
+.tag-cold { background: #E6EDF7; color: #0C2550; }
+.tag-synced { background: var(--green-light); color: var(--green-text); }
+.tag-pending { background: var(--surface2); color: var(--text-muted); }
+.tag-scan { background: var(--purple-light); color: var(--purple-text); }
+.check-group { display: flex; flex-wrap: wrap; gap: 8px; }
+.check-label { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; padding: 10px 14px; border: 0.5px solid var(--border-mid); border-radius: var(--radius); background: var(--surface); transition: all 0.15s; min-height: 44px; }
+.check-label:hover { background: var(--surface2); }
+.check-label input[type=checkbox] { width: 18px; height: 18px; cursor: pointer; accent-color: var(--accent); flex-shrink: 0; }
+.scan-zone { border: 1.5px dashed var(--border-mid); border-radius: var(--radius-lg); padding: 1.75rem; text-align: center; cursor: pointer; transition: all 0.2s; }
+.scan-zone:hover { border-color: var(--accent); background: var(--surface2); }
+.scan-zone.dragover { border-color: var(--accent); background: var(--surface2); }
+.lead-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.25rem; margin-bottom: 10px; }
+.lead-avatar { width: 38px; height: 38px; border-radius: 50%; background: var(--accent-light); color: var(--accent-text); font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.filter-bar { display: flex; gap: 10px; margin-bottom: 1rem; align-items: center; flex-wrap: wrap; }
+.filter-bar input, .filter-bar select { font-family: 'DM Sans', sans-serif; font-size: 14px; padding: 10px 14px; border: 0.5px solid var(--border-mid); border-radius: var(--radius); outline: none; background: var(--surface); color: var(--text); }
+.filter-bar input:focus, .filter-bar select:focus { border-color: var(--accent); }
+.scan-status { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--purple-light); border-radius: var(--radius); margin-top: 10px; }
+.scan-spinner { width: 16px; height: 16px; border: 2px solid rgba(74,63,143,0.3); border-top-color: #4A3F8F; border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; }
+#toast { position: fixed; bottom: 1.5rem; right: 1.5rem; padding: 11px 18px; border-radius: var(--radius); font-size: 13px; font-weight: 500; color: #fff; opacity: 0; transition: opacity 0.25s, transform 0.25s; transform: translateY(8px); pointer-events: none; z-index: 999; }
+#toast.show { opacity: 1; transform: translateY(0); }
+.admin-user-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 0.5px solid var(--border); }
+.admin-user-row:last-child { border-bottom: none; }
+.tc-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 0; border-bottom: 0.5px solid var(--border); }
+.tc-row:last-child { border-bottom: none; }
+.tc-who { width: 170px; flex-shrink: 0; }
+.tc-who .tc-name { font-weight: 500; color: var(--text); font-size: 13px; }
+.tc-who .tc-email { font-size: 11px; color: var(--text-hint); }
+.tc-input { font-family: 'DM Sans', sans-serif; font-size: 13px; padding: 8px 10px; border: 0.5px solid var(--border-mid); border-radius: 8px; outline: none; background: var(--surface); color: var(--text); }
+.tc-input:focus { border-color: var(--green); }
+#card-edit-details summary::-webkit-details-marker { display: none; }
+#card-edit-details summary::marker { content: ""; }
+#card-edit-details[open] #card-edit-chevron { transform: rotate(180deg); }
+
+@media (max-width: 640px) {
+  .grid-2 { grid-template-columns: 1fr; gap: 0; }
+  .grid-4 { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .main { padding: 0.75rem; }
+  .card { padding: 1rem; margin-bottom: 0.75rem; }
+  .topbar { padding: 0 0.75rem; }
+  .topbar-logo img { height: 36px; }
+  .user-name { display: none; }
+  .role-badge { display: none; }
+  .nav-tab { font-size: 12px; padding: 7px 10px; }
+  .filter-bar { flex-direction: column; align-items: stretch; }
+  .login-card { padding: 2rem 1.25rem; }
+}
+</style>
+</head>
+<body>
+
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">
+      <img src="/logo-light.svg" alt="Trelleborg" class="brand-logo" id="login-logo">
+    </div>
+    <h1 class="login-title">Sign in</h1>
+    <p class="login-sub">Innotrans 2026 · Berlin, 23–26 September</p>
+    <div class="field"><label>Email</label><input type="email" id="login-email" placeholder="your@trelleborg.com" autocomplete="email"></div>
+    <div class="field"><label>Password</label><input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password"></div>
+    <p class="error-msg" id="login-error"></p>
+    <button class="btn btn-primary btn-full" style="margin-top:1.25rem" onclick="doLogin()" id="login-btn">Sign in</button>
+    <p style="text-align:center;margin-top:1.25rem;font-size:13px;color:var(--text-muted)">First time? <a href="#" onclick="showSetup()" style="color:var(--accent);text-decoration:none;font-weight:500">Create your manager account</a></p>
+  </div>
+</div>
+
+<div id="setup-screen">
+  <div class="login-card" style="max-width:420px">
+    <div class="login-logo">
+      <img src="/logo-light.svg" alt="Trelleborg" class="brand-logo" id="setup-logo">
+    </div>
+    <h1 class="login-title">Create manager account</h1>
+    <p class="login-sub" style="margin-bottom:1.5rem">One-time setup. You'll need the admin secret you set in Cloudflare.</p>
+    <div class="field"><label>Full name</label><input type="text" id="setup-name" placeholder="e.g. Jonathan Wills"></div>
+    <div class="field"><label>Email</label><input type="email" id="setup-email" placeholder="your@trelleborg.com"></div>
+    <div class="field"><label>Password</label><input type="password" id="setup-password" placeholder="Choose a strong password"></div>
+    <div class="field"><label>Admin secret</label><input type="password" id="setup-secret" placeholder="The ADMIN_SECRET from Cloudflare"></div>
+    <p class="error-msg" id="setup-error"></p>
+    <button class="btn btn-primary btn-full" style="margin-top:1.25rem" onclick="doSetup()" id="setup-btn">Create account</button>
+    <p style="text-align:center;margin-top:1rem;font-size:13px"><a href="#" onclick="showLogin()" style="color:var(--accent);text-decoration:none">Back to sign in</a></p>
+  </div>
+</div>
+
+<div id="app">
+  <div id="toast"></div>
+  <header class="topbar">
+    <div class="topbar-logo">
+      <img src="/logo-light.svg" alt="Trelleborg" class="brand-logo" id="topbar-logo">
+    </div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <div class="nav-tabs">
+        <button class="nav-tab active" id="tab-capture" onclick="switchTab('capture')">Capture</button>
+        <button class="nav-tab" id="tab-leads" onclick="switchTab('leads')">Leads <span class="count-badge" id="lead-count-badge">0</span></button>
+        <button class="nav-tab" id="tab-card" onclick="switchTab('card')">My card</button>
+        <button class="nav-tab" id="tab-admin" onclick="switchTab('admin')" style="display:none">Team</button>
+      </div>
+      <div class="user-pill">
+        <div class="user-avatar" id="user-avatar-top"></div>
+        <span class="user-name" id="user-name-top"></span>
+        <span class="role-badge" id="role-badge-top"></span>
+      </div>
+      <button class="topbar-btn" id="theme-toggle" onclick="toggleTheme()" title="Toggle theme">☀</button>
+      <button class="topbar-btn" onclick="doLogout()" title="Sign out">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="main">
+    <div id="view-capture">
+      <div class="card">
+        <div class="card-title">Scan business card</div>
+        <div class="scan-zone" id="scan-zone" onclick="document.getElementById('card-file').click()" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
+          <div id="scan-preview-wrap" style="display:none;margin-bottom:12px">
+            <img id="scan-preview" style="max-height:150px;max-width:100%;border-radius:8px;object-fit:contain" alt="Business card">
+          </div>
+          <svg id="scan-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:var(--text-hint);display:block;margin:0 auto 8px"><rect x="2" y="6" width="20" height="12" rx="2"/></svg>
+          <p id="scan-zone-title" style="font-size:14px;font-weight:500;color:var(--text-muted)">Tap to take a photo or upload a business card</p>
+          <p id="scan-zone-sub" style="font-size:12px;color:var(--text-hint);margin-top:3px">JPG, PNG or HEIC — AI will extract contact details automatically</p>
+        </div>
+        <input type="file" id="card-file" accept="image/*" capture="environment" style="display:none" onchange="handleFileSelect(event)">
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <button class="btn btn-full" id="scan-btn" onclick="scanCard()" style="display:none;background:#4A3F8F;color:#fff;border-color:#4A3F8F">Extract details with AI</button>
+          <button class="btn btn-sm" id="rescan-btn" onclick="resetScan()" style="display:none">Use different image</button>
+        </div>
+        <div class="scan-status" id="scan-status" style="display:none">
+          <div class="scan-spinner"></div>
+          <span style="font-size:13px;color:#4A3F8F">Reading card with AI…</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">
+          Lead details
+          <span class="tag tag-scan" id="autofill-badge" style="display:none">✦ Auto-filled from card</span>
+        </div>
+        <div class="grid-2">
+          <div class="field"><label>First name *</label><input type="text" id="f-fname" placeholder="e.g. Anna"></div>
+          <div class="field"><label>Last name *</label><input type="text" id="f-lname" placeholder="e.g. Müller"></div>
+          <div class="field"><label>Email *</label><input type="email" id="f-email" placeholder="anna@company.com"></div>
+          <div class="field"><label>Phone</label><input type="tel" id="f-phone" placeholder="+49 30 …"></div>
+          <div class="field"><label>Company *</label><input type="text" id="f-company" placeholder="Company name"></div>
+          <div class="field"><label>Job title</label><input type="text" id="f-title" placeholder="e.g. Head of Procurement"></div>
+        </div>
+        <div class="field">
+          <label>Product interest</label>
+          <div class="check-group" id="product-checks">
+            <label class="check-label"><input type="checkbox" value="HALL"> HALL</label>
+            <label class="check-label"><input type="checkbox" value="Airspring"> Airspring</label>
+            <label class="check-label"><input type="checkbox" value="Conex3"> Conex3</label>
+          </div>
+          <input type="text" id="f-product-other" placeholder="Other product (optional)" style="margin-top:8px">
+        </div>
+        <div class="grid-2">
+          <div class="field"><label>Lead temperature</label>
+            <select id="f-temp"><option value="">Select…</option><option value="hot">Hot</option><option value="warm">Warm</option><option value="cold">Cold</option></select>
+          </div>
+          <div class="field"><label>Prospect or customer</label>
+            <select id="f-status"><option value="">Select…</option><option value="prospect">Prospect</option><option value="customer">Customer</option></select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Follow-up action</label>
+          <div class="check-group" id="followup-checks">
+            <label class="check-label"><input type="checkbox" value="Send information"> Send information</label>
+            <label class="check-label"><input type="checkbox" value="Arrange personal meeting"> Arrange personal meeting</label>
+            <label class="check-label"><input type="checkbox" value="Arrange Teams call"> Arrange Teams call</label>
+            <label class="check-label"><input type="checkbox" value="Follow-up by email"> Follow-up by email</label>
+            <label class="check-label"><input type="checkbox" value="No action needed"> No action needed</label>
+          </div>
+        </div>
+        <div class="field"><label>Notes</label><textarea id="f-notes" placeholder="Meeting highlights, specific requirements, any context…"></textarea></div>
+        <div style="display:flex;gap:10px;align-items:center;margin-top:4px;flex-wrap:wrap">
+          <button class="btn btn-primary" onclick="saveLead()" id="save-btn" style="flex:1;min-width:140px;justify-content:center">Save lead</button>
+          <button class="btn btn-success" onclick="saveAndAddAnother()" id="save-another-btn" style="min-width:170px;justify-content:center">Save &amp; add new lead</button>
+          <button class="btn" onclick="resetForm()">Clear</button>
+          <p class="error-msg" id="form-error"></p>
+        </div>
+      </div>
+    </div>
+
+    <div id="view-leads" style="display:none">
+      <div class="grid-4">
+        <div class="metric"><div class="metric-val" id="m-total">0</div><div class="metric-lbl">Total leads</div></div>
+        <div class="metric"><div class="metric-val" id="m-hot">0</div><div class="metric-lbl">Hot</div></div>
+        <div class="metric"><div class="metric-val" id="m-synced">0</div><div class="metric-lbl">Synced</div></div>
+        <div class="metric"><div class="metric-val" id="m-pending">0</div><div class="metric-lbl">Pending sync</div></div>
+      </div>
+      <div class="filter-bar">
+        <input type="text" id="search" placeholder="Search name, company…" oninput="renderLeads()">
+        <select id="filter-temp" onchange="renderLeads()">
+          <option value="">All temperatures</option>
+          <option value="hot">Hot</option>
+          <option value="warm">Warm</option>
+          <option value="cold">Cold</option>
+        </select>
+        <div style="margin-left:auto;display:flex;gap:8px">
+          <button class="btn btn-success btn-sm" onclick="syncAll()">Sync all to HubSpot</button>
+          <button class="btn btn-sm" onclick="exportCSV()">Export CSV</button>
+        </div>
+      </div>
+      <div id="leads-list"></div>
+      <div id="leads-loading" style="text-align:center;padding:3rem 0;color:var(--text-muted);font-size:14px">Loading leads…</div>
+      <p id="no-leads" style="font-size:14px;color:var(--text-muted);text-align:center;padding:3rem 0;display:none">No leads yet. Switch to Capture to add your first lead.</p>
+    </div>
+
+    <div id="view-card" style="display:none">
+      <div class="card">
+        <details id="card-edit-details">
+          <summary class="card-title" style="cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between">
+            <span>Your digital business card</span>
+            <span id="card-edit-chevron" style="font-size:12px;color:var(--text-muted);transition:transform 0.15s">▾</span>
+          </summary>
+        <p style="font-size:13px;color:var(--text-muted);margin:12px 0 16px">Fill this in once, then share your link or QR code at the stand so visitors can save your details straight to their phone.</p>
+        <div class="grid-2">
+          <div class="field"><label>Job title</label><input type="text" id="card-title" placeholder="e.g. Rail Sales Manager"></div>
+          <div class="field"><label>Function</label>
+            <select id="card-function">
+              <option value="">Select a function</option>
+              <option value="Sales">Sales</option>
+              <option value="Engineering">Engineering</option>
+              <option value="Marketing">Marketing</option>
+              <option value="Management">Management</option>
+              <option value="Support">Support</option>
+              <option value="Purchasing">Purchasing</option>
+              <option value="Internal sales">Internal sales</option>
+            </select>
+          </div>
+          <div class="field"><label>Business unit</label>
+            <select id="card-business-unit">
+              <option value="">Select a business unit</option>
+              <option value="AVS">AVS</option>
+              <option value="ECF">ECF</option>
+              <option value="TIS">TIS</option>
+              <option value="PE">PE</option>
+              <option value="RMC">RMC</option>
+            </select>
+          </div>
+          <div class="field"><label>Phone</label><input type="tel" id="card-phone" placeholder="+44 7…"></div>
+          <div class="field"><label>LinkedIn URL</label><input type="text" id="card-linkedin" placeholder="https://linkedin.com/in/…"></div>
+          <div class="field"><label>Headshot photo <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional)</span></label>
+            <div style="display:flex;align-items:center;gap:12px">
+              <div id="card-photo-preview" style="width:52px;height:52px;border-radius:50%;background:var(--bg);border:0.5px solid var(--border-mid);overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text-hint);text-align:center">No photo</div>
+              <button type="button" class="btn btn-sm" onclick="document.getElementById('card-photo-file').click()">Upload photo</button>
+              <input type="file" id="card-photo-file" accept="image/*" capture="user" style="display:none" onchange="uploadCardPhoto(this.files[0])">
+            </div>
+            <input type="hidden" id="card-photo">
+          </div>
+        </div>
+        <button class="btn btn-primary" style="margin-top:8px" onclick="saveCard()" id="save-card-btn">Save card</button>
+        </details>
+      </div>
+
+      <div class="card" id="card-share-card" style="display:none">
+        <div class="card-title">Share your card</div>
+        <div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start">
+          <img id="card-qr" style="width:160px;height:160px;border-radius:var(--radius);border:0.5px solid var(--border-mid)" alt="QR code linking to your card">
+          <div style="flex:1;min-width:220px">
+            <div class="field"><label>Your public link</label>
+              <div style="display:flex;gap:8px">
+                <input type="text" id="card-link" readonly style="flex:1">
+                <button class="btn btn-sm" onclick="copyCardLink()">Copy</button>
+              </div>
+            </div>
+            <a class="btn btn-sm" id="card-open-link" href="#" target="_blank" rel="noopener" style="display:inline-block;margin-top:4px">Open public card ↗</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Share a team member's card</div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Talking to a visitor who wants to speak to an engineer, or someone from sales? Tap a function or business unit to see who's who, or search by name.</p>
+        <div id="tc-filter-buttons" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+          <button type="button" class="btn btn-sm btn-success tc-filter-btn" data-function="" onclick="setFunctionFilter('')">All functions</button>
+          <button type="button" class="btn btn-sm tc-filter-btn" data-function="Sales" onclick="setFunctionFilter('Sales')">Sales</button>
+          <button type="button" class="btn btn-sm tc-filter-btn" data-function="Engineering" onclick="setFunctionFilter('Engineering')">Engineering</button>
+          <button type="button" class="btn btn-sm tc-filter-btn" data-function="Marketing" onclick="setFunctionFilter('Marketing')">Marketing</button>
+          <button type="button" class="btn btn-sm tc-filter-btn" data-function="Management" onclick="setFunctionFilter('Management')">Management</button>
+          <button type="button" class="btn btn-sm tc-filter-btn" data-function="Support" onclick="setFunctionFilter('Support')">Support</button>
+          <button type="button" class="btn btn-sm tc-filter-btn" data-function="Purchasing" onclick="setFunctionFilter('Purchasing')">Purchasing</button>
+          <button type="button" class="btn btn-sm tc-filter-btn" data-function="Internal sales" onclick="setFunctionFilter('Internal sales')">Internal sales</button>
+        </div>
+        <div id="tc-filter-bu-buttons" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+          <button type="button" class="btn btn-sm btn-success tc-filter-bu-btn" data-bu="" onclick="setBuFilter('')">All business units</button>
+          <button type="button" class="btn btn-sm tc-filter-bu-btn" data-bu="AVS" onclick="setBuFilter('AVS')">AVS</button>
+          <button type="button" class="btn btn-sm tc-filter-bu-btn" data-bu="ECF" onclick="setBuFilter('ECF')">ECF</button>
+          <button type="button" class="btn btn-sm tc-filter-bu-btn" data-bu="TIS" onclick="setBuFilter('TIS')">TIS</button>
+          <button type="button" class="btn btn-sm tc-filter-bu-btn" data-bu="PE" onclick="setBuFilter('PE')">PE</button>
+          <button type="button" class="btn btn-sm tc-filter-bu-btn" data-bu="RMC" onclick="setBuFilter('RMC')">RMC</button>
+        </div>
+        <input type="text" id="tc-filter-search" class="tc-input" placeholder="Or search by name" style="width:100%;margin-bottom:12px" oninput="renderShareDirectory()">
+        <div id="share-team-list" style="font-size:13px;color:var(--text-muted)">Loading…</div>
+      </div>
+    </div>
+
+    <div id="view-admin" style="display:none">
+      <div class="card">
+        <div class="card-title">Add team member</div>
+        <div class="grid-2">
+          <div class="field"><label>Full name</label><input type="text" id="a-name" placeholder="e.g. Sophie Lang"></div>
+          <div class="field"><label>Email</label><input type="email" id="a-email" placeholder="sophie@trelleborg.com"></div>
+          <div class="field"><label>Password</label><input type="password" id="a-password" placeholder="Set a password"></div>
+          <div class="field"><label>Role</label>
+            <select id="a-role"><option value="team">Team member</option><option value="manager">Manager</option></select>
+          </div>
+        </div>
+        <div class="field"><label>Admin secret</label><input type="password" id="a-secret" placeholder="Enter admin secret to authorise"></div>
+        <p class="error-msg" id="admin-error"></p>
+        <button class="btn btn-primary" style="margin-top:8px" onclick="addUser()" id="add-user-btn">Add team member</button>
+      </div>
+      <div class="card">
+        <div class="card-title">Leads by team member</div>
+        <div id="team-summary" style="font-size:13px;color:var(--text-muted)">Loading…</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Team cards</div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Fill in job titles, phone numbers and LinkedIn links on everyone's behalf ahead of the show. People can still edit their own under "My card".</p>
+        <div id="team-cards-list" style="font-size:13px;color:var(--text-muted)">Loading…</div>
+      </div>
+      <div class="card">
+        <div class="card-title">Bulk import team details</div>
+        <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Paste a list with columns Name, Surname, Department, Company, and optionally Job Title, Email, one person per line. Separate columns with | (pipe characters survive copy-paste more reliably than tabs), a header row is fine. Matches by email when given, otherwise by name. Anyone with no existing account gets one created automatically, using the admin secret entered below in "Add a team member".</p>
+        <textarea id="bulk-import-text" placeholder="Alice|Stancanelli|Marketing|AVS|Digital Marketing Manager|alice.stancanelli@trelleborg.com" style="width:100%;min-height:120px;font-family:'DM Sans',sans-serif;font-size:13px;padding:10px 12px;border:0.5px solid var(--border-mid);border-radius:var(--radius);outline:none;background:var(--surface);color:var(--text);resize:vertical;margin-bottom:10px"></textarea>
+        <button class="btn btn-primary" id="bulk-import-btn" onclick="runBulkImport()">Import</button>
+        <div id="bulk-import-result" style="font-size:13px;color:var(--text-muted);margin-top:14px"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+let currentUser = null;
+let allLeads = [];
+let currentImageBase64 = null;
+let currentImageType = null;
+
+function getToken() { return sessionStorage.getItem('it_token'); }
+function setToken(t) { sessionStorage.setItem('it_token', t); }
+function clearToken() { sessionStorage.removeItem('it_token'); }
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('it_theme', theme);
+  const isDark = theme === 'dark';
+  document.querySelectorAll('.brand-logo').forEach(el => {
+    el.src = isDark ? '/logo-dark.svg' : '/logo-light.svg';
   });
+  const btn = document.getElementById('theme-toggle');
+  if (btn) btn.textContent = isDark ? '☀' : '🌙';
+}
 
-  const data = await response.json();
-  if (!response.ok) return json({ error: data.error?.message || "AI extraction failed" }, 500);
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') || 'light';
+  applyTheme(current === 'dark' ? 'light' : 'dark');
+}
 
-  const raw = data.content.filter(b => b.type === "text").map(b => b.text).join("");
+function showSetup() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('setup-screen').style.display = 'flex';
+}
+function showLogin() {
+  document.getElementById('setup-screen').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+}
+
+async function api(path, options = {}) {
+  const token = getToken();
+  const headers = { 'Content-Type': 'application/json', ...(token ? { 'Authorization': 'Bearer ' + token } : {}), ...(options.headers || {}) };
+  const res = await fetch(path, { ...options, headers });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Request failed');
+  return data;
+}
+
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const err = document.getElementById('login-error');
+  const btn = document.getElementById('login-btn');
+  if (!email || !password) { err.textContent = 'Please enter your email and password.'; return; }
+  err.textContent = '';
+  btn.innerHTML = '<span class="spinner-inline"></span> Signing in…';
+  btn.disabled = true;
   try {
-    const parsed = JSON.parse(raw.replace(/```json|```/g, "").trim());
-    return json(parsed);
-  } catch {
-    return json({ error: "Could not parse card details" }, 500);
+    const data = await api('/api/auth?action=login', { method: 'POST', body: JSON.stringify({ email, password }) });
+    setToken(data.token);
+    currentUser = { name: data.name, email: data.email, role: data.role };
+    showApp();
+  } catch(e) {
+    err.textContent = e.message;
+    btn.innerHTML = 'Sign in';
+    btn.disabled = false;
   }
 }
+
+document.getElementById('login-password').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+async function doSetup() {
+  const name = document.getElementById('setup-name').value.trim();
+  const email = document.getElementById('setup-email').value.trim();
+  const password = document.getElementById('setup-password').value;
+  const adminSecret = document.getElementById('setup-secret').value;
+  const err = document.getElementById('setup-error');
+  const btn = document.getElementById('setup-btn');
+  if (!name || !email || !password || !adminSecret) { err.textContent = 'Please fill in all fields.'; return; }
+  err.textContent = '';
+  btn.innerHTML = '<span class="spinner-inline"></span> Creating…';
+  btn.disabled = true;
+  try {
+    await api('/api/auth?action=register', { method: 'POST', body: JSON.stringify({ name, email, password, role: 'manager', adminSecret }) });
+    showLogin();
+    document.getElementById('login-email').value = email;
+    document.getElementById('login-error').style.color = 'var(--green)';
+    document.getElementById('login-error').textContent = 'Account created — please sign in.';
+  } catch(e) {
+    err.textContent = e.message;
+  }
+  btn.innerHTML = 'Create account';
+  btn.disabled = false;
+}
+
+async function doLogout() {
+  try { await api('/api/auth?action=logout', { method: 'POST' }); } catch(e) {}
+  clearToken();
+  currentUser = null;
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('login-email').value = '';
+  document.getElementById('login-password').value = '';
+  document.getElementById('login-btn').innerHTML = 'Sign in';
+  document.getElementById('login-btn').disabled = false;
+}
+
+function showApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('setup-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  const initials = currentUser.name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+  document.getElementById('user-avatar-top').textContent = initials;
+  document.getElementById('user-name-top').textContent = currentUser.name;
+  document.getElementById('role-badge-top').textContent = currentUser.role === 'manager' ? 'Manager' : 'Team';
+  if (currentUser.role === 'manager') document.getElementById('tab-admin').style.display = 'flex';
+  applyTheme(localStorage.getItem('it_theme') || 'light');
+  switchTab('capture');
+}
+
+async function checkSession() {
+  const token = getToken();
+  if (!token) return;
+  try {
+    const data = await api('/api/auth?action=verify');
+    if (data.valid) { currentUser = { name: data.name, email: data.email, role: data.role }; showApp(); }
+  } catch(e) { clearToken(); }
+}
+
+function switchTab(t) {
+  ['capture','leads','card','admin'].forEach(v => {
+    document.getElementById('view-' + v).style.display = v === t ? 'block' : 'none';
+    const tab = document.getElementById('tab-' + v);
+    if (tab) tab.classList.toggle('active', v === t);
+  });
+  if (t === 'leads') loadLeads();
+  if (t === 'card') loadCard();
+  if (t === 'admin') { loadAdminSummary(); loadTeamCards(); }
+}
+
+async function loadCard() {
+  try {
+    const c = await api('/api/card');
+    document.getElementById('card-title').value = c.title || '';
+    document.getElementById('card-function').value = c.function || '';
+    document.getElementById('card-business-unit').value = c.businessUnit || '';
+    document.getElementById('card-phone').value = c.phone || '';
+    document.getElementById('card-linkedin').value = c.linkedin || '';
+    document.getElementById('card-photo').value = c.photoUrl || '';
+    setCardPhotoPreview(c.photoUrl);
+    renderCardShare(c.slug, c.qrImageUrl);
+    document.getElementById('card-edit-details').open = !c.title;
+  } catch(e) {
+    showToast(e.message, false);
+  }
+  loadShareDirectory();
+}
+
+function setCardPhotoPreview(url) {
+  const preview = document.getElementById('card-photo-preview');
+  preview.innerHTML = url ? '<img src="' + url + '" style="width:100%;height:100%;object-fit:cover">' : 'No photo';
+}
+
+function uploadCardPhoto(file) {
+  if (!file) return;
+  const preview = document.getElementById('card-photo-preview');
+  preview.innerHTML = '<span class="spinner-inline"></span>';
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const img = new Image();
+    img.onload = function() {
+      const maxDim = 480;
+      let w = img.width, h = img.height;
+      if (w >= h && w > maxDim) { h = Math.round(h * maxDim / w); w = maxDim; }
+      else if (h > w && h > maxDim) { w = Math.round(w * maxDim / h); h = maxDim; }
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+      document.getElementById('card-photo').value = dataUrl;
+      setCardPhotoPreview(dataUrl);
+      showToast('Photo added, click Save card to keep it');
+    };
+    img.onerror = function() {
+      setCardPhotoPreview(document.getElementById('card-photo').value);
+      showToast('Could not read that image', false);
+    };
+    img.src = e.target.result;
+  };
+  reader.onerror = function() {
+    setCardPhotoPreview(document.getElementById('card-photo').value);
+    showToast('Could not read that file', false);
+  };
+  reader.readAsDataURL(file);
+}
+
+function renderCardShare(slug, qrImageUrl) {
+  if (!slug) return;
+  const link = window.location.origin + '/card.html?id=' + encodeURIComponent(slug);
+  document.getElementById('card-link').value = link;
+  document.getElementById('card-open-link').href = link;
+  document.getElementById('card-qr').src = qrImageUrl || ('https://api.qrserver.com/v1/create-qr-code/?size=320x320&data=' + encodeURIComponent(link));
+  document.getElementById('card-share-card').style.display = 'block';
+}
+
+let teamCardDirectory = [];
+let activeFunctionFilter = '';
+let activeBuFilter = '';
+
+async function loadShareDirectory() {
+  const container = document.getElementById('share-team-list');
+  container.textContent = 'Loading…';
+  try {
+    teamCardDirectory = await api('/api/card?all=1');
+    renderShareDirectory();
+  } catch(e) {
+    container.textContent = e.message;
+  }
+}
+
+function setFunctionFilter(fn) {
+  activeFunctionFilter = fn;
+  document.querySelectorAll('.tc-filter-btn').forEach(btn => {
+    btn.classList.toggle('btn-success', btn.dataset.function === fn);
+  });
+  renderShareDirectory();
+}
+
+function setBuFilter(bu) {
+  activeBuFilter = bu;
+  document.querySelectorAll('.tc-filter-bu-btn').forEach(btn => {
+    btn.classList.toggle('btn-success', btn.dataset.bu === bu);
+  });
+  renderShareDirectory();
+}
+
+function renderShareDirectory() {
+  const q = document.getElementById('tc-filter-search').value.trim().toLowerCase();
+  const container = document.getElementById('share-team-list');
+  let list = teamCardDirectory.filter(c => c.slug && c.email !== currentUser.email);
+  if (activeFunctionFilter) list = list.filter(c => c.function === activeFunctionFilter);
+  if (activeBuFilter) list = list.filter(c => c.businessUnit === activeBuFilter);
+  if (q) list = list.filter(c => c.name.toLowerCase().includes(q));
+  if (!list.length) { container.textContent = 'No matching team members with a card set up yet.'; return; }
+  container.innerHTML = list.map(c => `
+    <div class="tc-row">
+      <div class="tc-who">
+        <div class="tc-name">${escapeHtml(c.name)}</div>
+        <div class="tc-email">${escapeHtml([c.title, c.businessUnit].filter(Boolean).join(' · ') || c.function || '')}</div>
+      </div>
+      <button class="btn btn-sm btn-primary" onclick="shareCard('${escapeHtml(c.slug)}', '${escapeHtml(c.name)}')">Share</button>
+      <a class="btn btn-sm" href="/card.html?id=${encodeURIComponent(c.slug)}" target="_blank" rel="noopener">View ↗</a>
+    </div>
+  `).join('');
+}
+
+function shareCard(slug, name) {
+  const link = window.location.origin + '/card.html?id=' + encodeURIComponent(slug);
+  if (navigator.share) {
+    navigator.share({ title: name + ' — Trelleborg', text: name + "'s digital business card", url: link }).catch(() => {});
+  } else {
+    navigator.clipboard.writeText(link).then(() => showToast('Link copied')).catch(() => showToast('Could not copy link, select and copy manually', false));
+  }
+}
+
+async function saveCard() {
+  const btn = document.getElementById('save-card-btn');
+  const original = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-inline"></span> Saving…';
+  try {
+    const body = {
+      title: document.getElementById('card-title').value.trim(),
+      function: document.getElementById('card-function').value,
+      businessUnit: document.getElementById('card-business-unit').value,
+      phone: document.getElementById('card-phone').value.trim(),
+      linkedin: document.getElementById('card-linkedin').value.trim(),
+      photoUrl: document.getElementById('card-photo').value.trim()
+    };
+    const c = await api('/api/card', { method: 'PATCH', body: JSON.stringify(body) });
+    renderCardShare(c.slug, c.qrImageUrl);
+    showToast('Card saved');
+    if (c.title) document.getElementById('card-edit-details').open = false;
+  } catch(e) {
+    showToast(e.message, false);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = original;
+  }
+}
+
+function copyCardLink() {
+  const input = document.getElementById('card-link');
+  input.select();
+  input.setSelectionRange(0, 99999);
+  navigator.clipboard.writeText(input.value).then(() => showToast('Link copied')).catch(() => showToast('Could not copy link, select and copy manually', false));
+}
+
+function showToast(msg, ok=true) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.background = ok ? 'var(--green)' : 'var(--red)';
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function handleDragOver(e) { e.preventDefault(); document.getElementById('scan-zone').classList.add('dragover'); }
+function handleDragLeave() { document.getElementById('scan-zone').classList.remove('dragover'); }
+function handleDrop(e) { e.preventDefault(); document.getElementById('scan-zone').classList.remove('dragover'); const f = e.dataTransfer.files[0]; if (f && f.type.startsWith('image/')) loadFile(f); }
+function handleFileSelect(e) { const f = e.target.files[0]; if (f) loadFile(f); }
+
+function loadFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const dataUrl = e.target.result;
+    currentImageBase64 = dataUrl.split(',')[1];
+    currentImageType = file.type || 'image/jpeg';
+    document.getElementById('scan-preview').src = dataUrl;
+    document.getElementById('scan-preview-wrap').style.display = 'block';
+    document.getElementById('scan-icon').style.display = 'none';
+    document.getElementById('scan-zone-title').style.display = 'none';
+    document.getElementById('scan-zone-sub').style.display = 'none';
+    document.getElementById('scan-btn').style.display = 'flex';
+    document.getElementById('rescan-btn').style.display = 'inline-flex';
+  };
+  reader.readAsDataURL(file);
+}
+
+function resetScan() {
+  currentImageBase64 = null; currentImageType = null;
+  document.getElementById('scan-preview-wrap').style.display = 'none';
+  document.getElementById('scan-preview').src = '';
+  document.getElementById('scan-icon').style.display = 'block';
+  document.getElementById('scan-zone-title').style.display = 'block';
+  document.getElementById('scan-zone-sub').style.display = 'block';
+  document.getElementById('scan-btn').style.display = 'none';
+  document.getElementById('rescan-btn').style.display = 'none';
+  document.getElementById('scan-status').style.display = 'none';
+  document.getElementById('card-file').value = '';
+}
+
+async function scanCard() {
+  if (!currentImageBase64) return;
+  document.getElementById('scan-btn').style.display = 'none';
+  document.getElementById('scan-status').style.display = 'flex';
+  try {
+    const parsed = await api('/api/scan', { method: 'POST', body: JSON.stringify({ imageBase64: currentImageBase64, imageType: currentImageType }) });
+    const map = { 'f-fname': parsed.firstName, 'f-lname': parsed.lastName, 'f-email': parsed.email, 'f-phone': parsed.phone, 'f-company': parsed.company, 'f-title': parsed.jobTitle };
+    let filled = 0;
+    Object.entries(map).forEach(([id, val]) => {
+      if (val) { document.getElementById(id).value = val; document.getElementById(id).classList.add('auto-filled'); setTimeout(() => document.getElementById(id).classList.remove('auto-filled'), 3500); filled++; }
+    });
+    document.getElementById('autofill-badge').style.display = filled > 0 ? 'inline-flex' : 'none';
+    document.getElementById('scan-status').style.display = 'none';
+    document.getElementById('rescan-btn').style.display = 'inline-flex';
+    showToast(filled > 0 ? filled + ' fields extracted from card' : 'Could not read card — please fill in manually', filled > 0);
+  } catch(e) {
+    document.getElementById('scan-status').style.display = 'none';
+    document.getElementById('scan-btn').style.display = 'flex';
+    showToast('Extraction failed: ' + e.message, false);
+  }
+}
+
+function getChecked(containerId) { return [...document.querySelectorAll('#' + containerId + ' input:checked')].map(c => c.value); }
+
+async function saveLeadCore(btn) {
+  const fname = document.getElementById('f-fname').value.trim();
+  const lname = document.getElementById('f-lname').value.trim();
+  const email = document.getElementById('f-email').value.trim();
+  const company = document.getElementById('f-company').value.trim();
+  const err = document.getElementById('form-error');
+  if (!fname || !lname || !email || !company) { err.textContent = 'Please fill in all required fields.'; return false; }
+  if (!/\S+@\S+\.\S+/.test(email)) { err.textContent = 'Please enter a valid email address.'; return false; }
+  err.textContent = '';
+  const original = btn.innerHTML;
+  btn.innerHTML = '<span class="spinner-inline"></span> Saving…';
+  btn.disabled = true;
+  const products = getChecked('product-checks');
+  const otherProduct = document.getElementById('f-product-other').value.trim();
+  if (otherProduct) products.push(otherProduct);
+  let ok = true;
+  try {
+    await api('/api/leads', { method: 'POST', body: JSON.stringify({
+      fname, lname, email,
+      phone: document.getElementById('f-phone').value.trim(),
+      company,
+      title: document.getElementById('f-title').value.trim(),
+      products,
+      temp: document.getElementById('f-temp').value,
+      status: document.getElementById('f-status').value,
+      followupActions: getChecked('followup-checks'),
+      notes: document.getElementById('f-notes').value.trim(),
+      scanned: !!currentImageBase64
+    })});
+    showToast(fname + ' ' + lname + ' saved successfully');
+    document.getElementById('lead-count-badge').textContent = parseInt(document.getElementById('lead-count-badge').textContent || 0) + 1;
+  } catch(e) { showToast('Failed to save lead — please try again', false); ok = false; }
+  btn.innerHTML = original;
+  btn.disabled = false;
+  return ok;
+}
+
+async function saveLead() {
+  const ok = await saveLeadCore(document.getElementById('save-btn'));
+  if (ok) resetForm();
+}
+
+async function saveAndAddAnother() {
+  const ok = await saveLeadCore(document.getElementById('save-another-btn'));
+  if (ok) {
+    ['f-fname','f-lname','f-email','f-phone','f-title'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('autofill-badge').style.display = 'none';
+    resetScan();
+    document.getElementById('f-fname').focus();
+  }
+}
+
+function resetForm() {
+  ['f-fname','f-lname','f-email','f-phone','f-company','f-title','f-notes','f-product-other'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('f-temp').value = '';
+  document.getElementById('f-status').value = '';
+  document.querySelectorAll('.check-label input:checked').forEach(c => c.checked = false);
+  document.getElementById('form-error').textContent = '';
+  document.getElementById('autofill-badge').style.display = 'none';
+  resetScan();
+}
+
+async function loadLeads() {
+  document.getElementById('leads-loading').style.display = 'block';
+  document.getElementById('leads-list').innerHTML = '';
+  document.getElementById('no-leads').style.display = 'none';
+  try { allLeads = await api('/api/leads'); document.getElementById('lead-count-badge').textContent = allLeads.length; }
+  catch(e) { showToast('Failed to load leads', false); }
+  document.getElementById('leads-loading').style.display = 'none';
+  renderLeads(); updateMetrics();
+}
+
+function renderLeads() {
+  const q = (document.getElementById('search').value || '').toLowerCase();
+  const tf = document.getElementById('filter-temp').value;
+  const filtered = allLeads.filter(l => {
+    const match = !q || (l.fname + ' ' + l.lname + ' ' + l.company).toLowerCase().includes(q);
+    return match && (!tf || l.temp === tf);
+  });
+  const list = document.getElementById('leads-list');
+  const none = document.getElementById('no-leads');
+  if (!filtered.length) { list.innerHTML = ''; none.style.display = 'block'; return; }
+  none.style.display = 'none';
+  list.innerHTML = filtered.map(l => {
+    const initials = ((l.fname||'')[0]||'') + ((l.lname||'')[0]||'');
+    const tagClass = l.temp === 'hot' ? 'tag-hot' : l.temp === 'warm' ? 'tag-warm' : 'tag-cold';
+    const tempTag = l.temp ? `<span class="tag ${tagClass}">${l.temp}</span>` : '';
+    const statusTag = l.status ? `<span class="tag ${l.status === 'customer' ? 'tag-synced' : 'tag-warm'}">${l.status}</span>` : '';
+    const syncTag = l.synced ? '<span class="tag tag-synced">✓ HubSpot</span>' : '<span class="tag tag-pending">Pending</span>';
+    const scanTag = l.scanned ? '<span class="tag tag-scan">Card scan</span>' : '';
+    const products = l.products?.length ? `<p style="font-size:12px;color:var(--text-muted);margin-top:4px">${l.products.join(' · ')}</p>` : '';
+    const followupList = l.followupActions?.length ? l.followupActions : (l.followup ? [l.followup] : []);
+    const followup = followupList.length ? `<p style="font-size:12px;color:var(--text-muted);margin-top:2px">→ ${followupList.join(' · ')}</p>` : '';
+    const notes = l.notes ? `<p style="font-size:12px;color:var(--text-hint);margin-top:4px;font-style:italic">${l.notes.slice(0,110)}${l.notes.length>110?'…':''}</p>` : '';
+    const capturedBy = currentUser.role === 'manager' ? `<p style="font-size:11px;color:var(--text-hint);margin-top:3px">Captured by ${l.capturedByName||l.capturedBy}</p>` : '';
+    const syncBtn = l.synced ? '' : `<button class="btn btn-sm" onclick="syncOne('${l.id}')">Sync</button>`;
+    return `<div class="lead-card"><div style="display:flex;align-items:flex-start;gap:12px"><div class="lead-avatar">${initials.toUpperCase()}</div><div style="flex:1;min-width:0"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="font-size:15px;font-weight:600">${l.fname} ${l.lname}</span>${tempTag}${statusTag}${syncTag}${scanTag}</div><p style="font-size:13px;color:var(--text-muted)">${[l.title,l.company].filter(Boolean).join(' · ')}</p><p style="font-size:13px;color:var(--text-muted)">${l.email}${l.phone?' · '+l.phone:''}</p>${capturedBy}${products}${followup}${notes}</div><div style="display:flex;gap:6px;flex-shrink:0">${syncBtn}<button class="btn btn-sm btn-danger" onclick="deleteLead('${l.id}')">✕</button></div></div></div>`;
+  }).join('');
+}
+
+function updateMetrics() {
+  document.getElementById('m-total').textContent = allLeads.length;
+  document.getElementById('m-hot').textContent = allLeads.filter(l => l.temp === 'hot').length;
+  document.getElementById('m-synced').textContent = allLeads.filter(l => l.synced).length;
+  document.getElementById('m-pending').textContent = allLeads.filter(l => !l.synced).length;
+}
+
+async function syncOne(id) {
+  try {
+    const updated = await api('/api/leads?id=' + id, { method: 'PATCH', body: JSON.stringify({ synced: true }) });
+    const idx = allLeads.findIndex(l => l.id === id);
+    if (idx >= 0) allLeads[idx] = updated;
+    renderLeads(); updateMetrics(); showToast('Lead synced to HubSpot');
+  } catch(e) { showToast('Sync failed', false); }
+}
+
+async function syncAll() {
+  const unsynced = allLeads.filter(l => !l.synced);
+  if (!unsynced.length) { showToast('All leads already synced'); return; }
+  try {
+    await Promise.all(unsynced.map(l => api('/api/leads?id=' + l.id, { method: 'PATCH', body: JSON.stringify({ synced: true }) })));
+    unsynced.forEach(l => l.synced = true);
+    renderLeads(); updateMetrics(); showToast(unsynced.length + ' lead' + (unsynced.length > 1 ? 's' : '') + ' synced to HubSpot');
+  } catch(e) { showToast('Sync failed', false); }
+}
+
+async function deleteLead(id) {
+  if (!confirm('Delete this lead?')) return;
+  try {
+    await api('/api/leads?id=' + id, { method: 'DELETE' });
+    allLeads = allLeads.filter(l => l.id !== id);
+    document.getElementById('lead-count-badge').textContent = allLeads.length;
+    renderLeads(); updateMetrics(); showToast('Lead deleted');
+  } catch(e) { showToast('Delete failed', false); }
+}
+
+function exportCSV() {
+  if (!allLeads.length) { showToast('No leads to export', false); return; }
+  const hdr = ['First name','Last name','Email','Phone','Company','Job title','Products','Temperature','Prospect/Customer','Follow-up','Notes','Captured by','Card scanned','Synced','Date'];
+  const rows = allLeads.map(l => {
+    const followupList = l.followupActions?.length ? l.followupActions : (l.followup ? [l.followup] : []);
+    return [l.fname,l.lname,l.email,l.phone,l.company,l.title,(l.products||[]).join('; '),l.temp,l.status,followupList.join('; '),l.notes,l.capturedByName||l.capturedBy,l.scanned?'Yes':'No',l.synced?'Yes':'No',(l.createdAt||'').slice(0,10)].map(v => '"'+String(v||'').replace(/"/g,'""')+'"').join(',');
+  });
+  const csv = [hdr.join(','),...rows].join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = 'innotrans_leads_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+  showToast('CSV downloaded');
+}
+
+async function addUser() {
+  const name = document.getElementById('a-name').value.trim();
+  const email = document.getElementById('a-email').value.trim();
+  const password = document.getElementById('a-password').value;
+  const role = document.getElementById('a-role').value;
+  const adminSecret = document.getElementById('a-secret').value;
+  const err = document.getElementById('admin-error');
+  const btn = document.getElementById('add-user-btn');
+  if (!name || !email || !password || !adminSecret) { err.textContent = 'All fields are required.'; return; }
+  err.textContent = '';
+  btn.innerHTML = '<span class="spinner-inline"></span> Adding…';
+  btn.disabled = true;
+  try {
+    await api('/api/auth?action=register', { method: 'POST', body: JSON.stringify({ name, email, password, role, adminSecret }) });
+    showToast(name + ' added to the team');
+    ['a-name','a-email','a-password','a-secret'].forEach(id => document.getElementById(id).value = '');
+  } catch(e) { err.textContent = e.message; }
+  btn.innerHTML = 'Add team member';
+  btn.disabled = false;
+}
+
+function loadAdminSummary() {
+  const container = document.getElementById('team-summary');
+  if (!allLeads.length) { container.textContent = 'No leads captured yet.'; return; }
+  const byTeam = {};
+  allLeads.forEach(l => {
+    const key = l.capturedByName || l.capturedBy || 'Unknown';
+    if (!byTeam[key]) byTeam[key] = { total: 0, hot: 0, synced: 0 };
+    byTeam[key].total++;
+    if (l.temp === 'hot') byTeam[key].hot++;
+    if (l.synced) byTeam[key].synced++;
+  });
+  container.innerHTML = Object.entries(byTeam).map(([name, s]) =>
+    `<div class="admin-user-row"><span style="font-weight:500">${name}</span><span style="color:var(--text-muted)">${s.total} leads · ${s.hot} hot · ${s.synced} synced</span></div>`
+  ).join('');
+}
+
+function escapeHtml(str) {
+  return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function functionOptionsHtml(selected) {
+  const opts = ['', 'Sales', 'Engineering', 'Marketing', 'Management', 'Support', 'Purchasing', 'Internal sales'];
+  return opts.map(f => `<option value="${escapeHtml(f)}"${selected === f ? ' selected' : ''}>${escapeHtml(f) || 'No function'}</option>`).join('');
+}
+
+function buOptionsHtml(selected) {
+  const opts = ['', 'AVS', 'ECF', 'TIS', 'PE', 'RMC'];
+  return opts.map(b => `<option value="${b}"${selected === b ? ' selected' : ''}>${b || 'No business unit'}</option>`).join('');
+}
+
+async function loadTeamCards() {
+  const container = document.getElementById('team-cards-list');
+  container.textContent = 'Loading…';
+  try {
+    const cards = await api('/api/card?all=1');
+    if (!cards.length) { container.textContent = 'No team members found.'; return; }
+    container.innerHTML = cards.map(c => `
+      <div class="tc-row">
+        <div class="tc-who">
+          <div class="tc-name">${escapeHtml(c.name)}</div>
+          <div class="tc-email">${escapeHtml(c.email)}</div>
+        </div>
+        <input type="text" class="tc-input" style="flex:1;min-width:120px" placeholder="Job title" value="${escapeHtml(c.title)}" data-field="title" data-email="${escapeHtml(c.email)}">
+        <select class="tc-input" data-field="function" data-email="${escapeHtml(c.email)}">${functionOptionsHtml(c.function)}</select>
+        <select class="tc-input" data-field="businessUnit" data-email="${escapeHtml(c.email)}">${buOptionsHtml(c.businessUnit)}</select>
+        <input type="tel" class="tc-input" style="width:130px" placeholder="Phone" value="${escapeHtml(c.phone)}" data-field="phone" data-email="${escapeHtml(c.email)}">
+        <input type="text" class="tc-input" style="flex:1;min-width:150px" placeholder="LinkedIn URL" value="${escapeHtml(c.linkedin)}" data-field="linkedin" data-email="${escapeHtml(c.email)}">
+        <button class="btn btn-sm" onclick="saveTeamCard('${escapeHtml(c.email)}', this)">Save</button>
+        ${c.slug ? `<a class="btn btn-sm" href="/card.html?id=${encodeURIComponent(c.slug)}" target="_blank" rel="noopener">View ↗</a>` : ''}
+      </div>
+    `).join('');
+  } catch(e) {
+    container.textContent = e.message;
+  }
+}
+
+async function saveTeamCard(email, btn) {
+  const inputs = document.querySelectorAll('.tc-input[data-email="' + CSS.escape(email) + '"]');
+  const body = {};
+  inputs.forEach(inp => { body[inp.dataset.field] = inp.value.trim(); });
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+  try {
+    await api('/api/card?email=' + encodeURIComponent(email), { method: 'PATCH', body: JSON.stringify(body) });
+    showToast('Saved ' + email);
+    loadTeamCards();
+  } catch(e) {
+    showToast(e.message, false);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = original;
+  }
+}
+
+function parseBulkImportText(text) {
+  const rows = [];
+  text.split('\n').forEach(line => {
+    if (!line.trim()) return;
+    let cells;
+    if (line.includes('|')) {
+      cells = line.split('|');
+    } else {
+      cells = line.split('\t');
+      if (cells.length < 4) cells = line.split(/\s{2,}/);
+    }
+    cells = cells.map(c => c.trim());
+    if (cells.length < 4) return;
+    while (cells.length < 6) cells.push('');
+    const [firstName, lastName, department, company, jobTitle, email] = cells;
+    if (!firstName || firstName.toLowerCase() === 'name') return; // skip header row
+    rows.push({ firstName, lastName, department, company, jobTitle, email });
+  });
+  return rows;
+}
+
+function generateTempPassword() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+  let pw = '';
+  for (let i = 0; i < 10; i++) pw += chars[Math.floor(Math.random() * chars.length)];
+  return pw;
+}
+
+function renderBulkResult(result, created, registerErrors) {
+  let html = `<div style="color:var(--green-text);font-weight:500;margin-bottom:6px">Matched and updated ${result.matched.length}</div>`;
+  if (created && created.length) {
+    html += `<div style="font-weight:500;margin-bottom:6px">Created ${created.length} new account${created.length === 1 ? '' : 's'}, share these temporary passwords so they can log in and change them:</div>`;
+    html += `<ul style="margin:0 0 12px 18px">${created.map(c => `<li>${escapeHtml(c.name)} — ${escapeHtml(c.email)} — <code>${escapeHtml(c.password)}</code></li>`).join('')}</ul>`;
+  }
+  if (registerErrors && registerErrors.length) {
+    html += `<div style="color:var(--red);font-weight:500;margin-bottom:6px">Could not create ${registerErrors.length} account${registerErrors.length === 1 ? '' : 's'}:</div>`;
+    html += `<ul style="margin:0 0 12px 18px">${registerErrors.map(e => `<li>${escapeHtml(e.name)} (${escapeHtml(e.email)}) — ${escapeHtml(e.error)}</li>`).join('')}</ul>`;
+  }
+  if (result.unmatched.length) {
+    html += `<div style="color:var(--red)">Could not match ${result.unmatched.length}, check spelling against their account name:</div>`;
+    html += `<ul style="margin:6px 0 0 18px">${result.unmatched.map(n => `<li>${escapeHtml(n)}</li>`).join('')}</ul>`;
+  }
+  return html;
+}
+
+async function runBulkImport() {
+  const btn = document.getElementById('bulk-import-btn');
+  const resultBox = document.getElementById('bulk-import-result');
+  const rows = parseBulkImportText(document.getElementById('bulk-import-text').value);
+  if (!rows.length) {
+    resultBox.textContent = 'Nothing to import, paste in some rows first.';
+    return;
+  }
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Importing…';
+  resultBox.textContent = '';
+  try {
+    let result = await api('/api/card?bulk=1', { method: 'POST', body: JSON.stringify({ rows }) });
+    const created = [];
+    const registerErrors = [];
+
+    if (result.unmatched.length) {
+      const missingSet = new Set(result.unmatched);
+      const toRegister = rows.filter(r => missingSet.has(`${r.firstName} ${r.lastName}`.trim()) && r.email);
+      const secretField = document.getElementById('a-secret');
+      const adminSecret = secretField ? secretField.value : '';
+
+      if (toRegister.length && !adminSecret) {
+        resultBox.innerHTML = renderBulkResult(result, [], []) +
+          `<div style="color:var(--red);margin-top:10px">${toRegister.length} of those have no account yet. Enter the admin secret in "Add a team member" below, then hit Import again to create accounts for them and retry.</div>`;
+        return;
+      }
+
+      for (const r of toRegister) {
+        const name = `${r.firstName} ${r.lastName}`.trim();
+        const password = generateTempPassword();
+        try {
+          await api('/api/auth?action=register', { method: 'POST', body: JSON.stringify({ name, email: r.email, password, role: 'team', adminSecret }) });
+          created.push({ name, email: r.email, password });
+        } catch(e) {
+          registerErrors.push({ name, email: r.email, error: e.message });
+        }
+      }
+
+      if (created.length) {
+        result = await api('/api/card?bulk=1', { method: 'POST', body: JSON.stringify({ rows }) });
+      }
+    }
+
+    resultBox.innerHTML = renderBulkResult(result, created, registerErrors);
+    loadTeamCards();
+    loadShareDirectory();
+  } catch(e) {
+    resultBox.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = original;
+  }
+}
+
+// Init
+const savedTheme = localStorage.getItem('it_theme') || 'light';
+applyTheme(savedTheme);
+checkSession();
+</script>
+</body>
+</html>
